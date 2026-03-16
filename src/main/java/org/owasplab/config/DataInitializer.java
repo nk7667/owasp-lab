@@ -89,14 +89,7 @@ public class DataInitializer implements CommandLineRunner {
             System.out.println("[DataInitializer] 创建视图 vw_accounts 失败: " + e.getMessage());
         }
 
-        // H2 2.x 默认没有 SLEEP()；为时间盲注提供稳定延迟函数（毫秒）
-        try {
-            entityManager
-                    .createNativeQuery("CREATE ALIAS IF NOT EXISTS SLEEP FOR \"java.lang.Thread.sleep\"")
-                    .executeUpdate();
-            System.out.println("[DataInitializer] 已创建别名函数 SLEEP(ms) -> java.lang.Thread.sleep");
-        } catch (Exception e) {
-            System.out.println("[DataInitializer] 创建别名函数 SLEEP 失败: " + e.getMessage());
-        }
+        // 时间盲注关卡已经在 Java 层使用 Thread.sleep 固定延迟，不再强依赖 H2 的 SLEEP 别名。
+        // 这里不额外创建数据库函数，以避免在不同 JDK/H2 版本上因重载解析差异导致启动失败。
     }
 }
