@@ -1,0 +1,61 @@
+{
+  "context": "xss_reflected_search_attr_href",
+  "title": "XSS · 反射型（企业搜索页：链接地址 → href 属性）",
+  "goal": "识别 URL/链接上下文的风险：`q` 会进入 `shareHref` 并在页面里作为 `<a href=\"...\">` 呈现（sink=href）。对比 VULN/WEAK/SAFE：VULN 直接拼接；WEAK 仅做最小黑名单替换（去掉 `javascript:` 等）但缺少协议白名单与规范化；SAFE 对 URL 做最小编码（`URLEncoder.encode(q,\"UTF-8\")`）并执行协议 allowlist（仅 http/https，否则降级为 `#`）。",
+  "vuln": {
+    "summary": "VULN：将用户输入拼进分享链接（`https://intra.example.local/search?q=<q>`），前端把 `shareHref` 直接作为 `href` 属性输出；在某些输入下可形成危险 scheme/异常链接行为。",
+    "impact": [
+      "点击触发：用户点击链接时可能执行恶意行为或跳转到钓鱼页面。",
+      "“看起来像正常链接”的攻击更隐蔽。"
+    ],
+    "whatToObserve": [
+      "参数：`q` + `target=attr`（或 `target=url`，服务端会归一化为 `attr`）。",
+      "响应字段：`shareHref`。",
+      "VULN/WEAK：前端预览会把 `shareHref` 直接放进 `href=\"...\"`；SAFE：前端用 DOM API `setAttribute` 写入，并配合协议 allowlist，常见结果是降级为 `#` 或保持 http/https。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：服务端构造分享链接时对 `q` 做最小 URL 编码，并对最终 URL 做协议 allowlist（仅 http/https，否则返回 `#`）；前端再用 `setAttribute/a.href` 写入，避免字符串拼接进入 `href=\"...\"` 上下文。",
+    "keyControls": [
+      "协议 allowlist：只允许 http/https；拒绝 javascript:/data: 等可执行 scheme。",
+      "避免拼 HTML：SAFE 使用 setAttribute/a.href 写入（safe sink），不让不可信字符串直接进入 href=\"...\" 上下文。",
+      "对 query 参数值使用标准 URL 编码（encodeURIComponent / URLEncoder），避免混淆与不一致。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/search/results",
+    "/api/v1/xss/weak/search/results",
+    "/api/v1/xss/safe/search/results"
+  ],
+  "notices": [
+    "这类攻击通常需要“点击链接”才触发；训练时请在预览里点击 Share link 观察行为差异。",
+    "WEAK 的实现是最小黑名单替换（例如去掉 `javascript:`），并不做 URL 编码/属性编码/协议白名单与规范化；因此容易出现“看起来修了，但仍可被变体/结构逃逸绕过”。SAFE 才是正确修复。",
+    "为了避免因果混淆：当 `target` 不是 `all` 时，服务端会把非目标落点强制降级为 SAFE。要练 href 落点请使用 `target=attr`（或 `all`）。"
+  ],
+  "nextSteps": [
+    "选择 target=attr，先输入正常关键字观察 share 链接是否可用。",
+    "VULN：尝试影响 href 的输入（重点观察引号/空白等是否会破坏属性结构），观察点击行为变化。",
+    "WEAK：先做对照：包含 `javascript:` 字面量的输入会被改写；再做对照：引号/属性结构问题依旧存在（因为 WEAK 没做属性编码/URL 规范化）。",
+    "SAFE：同样输入应被降级为 # 或保持为安全的 http/https，且不发生属性逃逸。"
+  ],
+  "whySafe": [
+    "href 属于 URL+属性上下文：仅做黑名单替换不可靠；应使用协议白名单与安全写入点。",
+    "把不可信数据从“HTML 字符串拼接”迁移到“DOM API setAttribute/a.href”，可显著减少上下文逃逸风险。"
+  ],
+  "allowedToTell": [
+    "可以提示：重点观察 shareHref/Share link 的行为差异（VULN/WEAK/SAFE）。",
+    "可以提示：安全修复遵循 OWASP：URL 校验 + 属性上下文安全写入。"
+  ],
+  "acceptanceCriteria": [
+    "VULN 或 WEAK：能通过输入影响 Share link 的行为（例如异常跳转/不安全链接形态）。",
+    "SAFE：危险 scheme 被拒绝/降级，且不发生属性上下文逃逸。"
+  ],
+  "doNotTell": [
+    "不要指导构造真实钓鱼或窃取敏感信息的 payload。"
+  ],
+  "references": [
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

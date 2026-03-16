@@ -1,0 +1,14 @@
+{
+  "id": "rce_ping_a2",
+  "title": "命令注入 · A2（拦截 ; && |）",
+  "allowedCommands": ["ping", "ls", "grep", "cat"],
+  "safeFiles": ["hosts", "app.log", "passwd.mock"],
+  "allowLsOptionLa": true,
+  "grepAllowRegex": false,
+  "grepKeywordPattern": "^[a-zA-Z0-9._-]+$",
+  "hostPattern": "^[a-zA-Z0-9.-]+$",
+  "pathPattern": "^[a-zA-Z0-9._/-]+$",
+  "weakenPathTraversal": false,
+  "transformRemoveSpaces": false,
+  "transformDecodeUrl": false
+}

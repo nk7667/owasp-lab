@@ -1,0 +1,59 @@
+{
+  "context": "xss_reflected_search_multi_multi",
+  "title": "XSS · 反射型（企业搜索页：混合流 ALL / 多落点）",
+  "goal": "理解真实业务的“混合流”：同一个 `q` 同时进入多个业务字段并落入不同上下文（`highlightHtml/emptyStateHtml` → HTML 内容、`shareHref` → href、`analyticsConfig` → `<script>` 中的 JS 表达式）。当 `target=all` 时，服务端不会对非目标落点做强制降级，因此更贴近真实系统，但也更容易信号混叠与定位困难。",
+  "vuln": {
+    "summary": "VULN：同一输入在多个上下文中被不安全使用（innerHTML / href / jsString），导致攻击面叠加且定位更困难。",
+    "impact": [
+      "信号混叠：payload 可能在多个区域同时触发，难以判断真正的根因与修复点。",
+      "修复复杂：需要按上下文分别采取正确策略（HTML 编码、URL 校验+属性安全写入、JS escaping）。"
+    ],
+    "whatToObserve": [
+      "target=all 时，页面同时展示结果区、Share link、Analytics 预览。",
+      "响应会包含：`highlightHtml`、`emptyStateHtml`、`shareHref`、`analyticsConfig`，并附带 `sinks` 列表说明每个落点的 context/sink/field 映射。",
+      "VULN/WEAK/SAFE 切换会同时影响多个区域的表现（mode 在 meta.mode）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：分别对不同上下文采取正确策略：HTML 内容转义/安全渲染；href 做 URL 校验（http/https allowlist）并用 safe sink 写入；JS 字符串做 JS escaping。",
+    "keyControls": [
+      "上下文正确编码：不要用同一种编码“通吃”。",
+      "降低混叠：训练/排查时优先单落点（target=html/attr/js）。",
+      "分层防御：CSP/安全模板/审计作为补充。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/search/results",
+    "/api/v1/xss/weak/search/results",
+    "/api/v1/xss/safe/search/results"
+  ],
+  "notices": [
+    "ALL 属于进阶：建议先分别练 target=html、target=attr、target=js，确认各自的利用与修复点。",
+    "如果出现多个区域同时变化（或控制台报错），优先回退到单落点定位根因。"
+  ],
+  "nextSteps": [
+    "先在单落点下分别验证 VULN/WEAK/SAFE 的差异。",
+    "再切到 target=all，观察同一输入在多落点下的综合效果。",
+    "总结：每个上下文需要的修复策略不同，并且混合流场景更需要分点修复与回归验证。"
+  ],
+  "whySafe": [
+    "浏览器在不同上下文的解析规则不同，上下文错误的编码会导致漏洞或破坏功能。",
+    "多落点场景下更需要结构化排查与分点修复。"
+  ],
+  "allowedToTell": [
+    "可以提示：先单落点，再 ALL；并按上下文分别修复。",
+    "可以提示：innerHTML/href/jsString 是三类典型上下文。"
+  ],
+  "acceptanceCriteria": [
+    "能说明为何 ALL 更难定位，以及为何必须按上下文分别修复。",
+    "SAFE：三个落点均采用正确策略（HTML/URL/JS）。"
+  ],
+  "doNotTell": [
+    "不要指导真实数据窃取。"
+  ],
+  "references": [
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

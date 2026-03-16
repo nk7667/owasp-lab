@@ -1,0 +1,70 @@
+{
+  "context": "csrf_low_get",
+  "title": "CSRF · Low（无防护：GET 改密）",
+  "goal": "识别 CSRF Low 关卡的攻击链：外站诱导 → GET 改密请求 → 浏览器自动携带 session cookie。关键点是无 CSRF token 防护，可以直接跨站诱导。",
+  "vuln": {
+    "summary": "VULN：使用 GET 方法改密，无 CSRF token 校验。攻击者可以构造恶意 URL，诱导受害者点击，浏览器会自动携带 session cookie 发起请求。",
+    "impact": [
+      "状态改变：受害者密码被修改，攻击者可接管账号。",
+      "隐蔽性强：攻击者无需获取受害者凭据，只需诱导点击。",
+      "跨站攻击：攻击 URL 可托管在外站，无需同源。"
+    ],
+    "whatToObserve": [
+      "接口：/api/v1/csrf/low/password/change（GET 方法）。",
+      "参数：password_new、password_conf、Change。",
+      "响应：成功返回 {changed: true}，失败返回错误信息。",
+      "Network 面板：观察 GET 请求是否发送，响应状态码。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE（防御措施）：使用 POST 方法 + CSRF token + SameSite Cookie。GET 改状态应被禁止，敏感操作必须有 token 校验。",
+    "keyControls": [
+      "POST 方法：敏感操作必须用 POST，避免 GET 改状态。",
+      "CSRF token：服务端生成随机 token，绑定 session，请求时校验。",
+      "SameSite Cookie：设置 SameSite=Lax/Strict，降低跨站携带风险。",
+      "Referer 检查：验证请求来源（可被绕过）。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/csrf/low/password/change",
+    "/api/v1/csrf/low/password/page"
+  ],
+  "notices": [
+    "Low 关卡演示最基础的 CSRF：无 token + GET 改密。",
+    "攻击者可以构造恶意 URL：http://victim.com/api/v1/csrf/low/password/change?password_new=hacked&password_conf=hacked&Change=Change",
+    "诱导方式：短链接、钓鱼邮件、恶意广告等。",
+    "现代浏览器 SameSite=Lax 下，GET 请求仍可能携带 cookie（取决于具体场景）。"
+  ],
+  "nextSteps": [
+    "登录受害者账号（admin/admin123）。",
+    "访问 evil 页面：http://victim.com/csrf/evil（包含 Image 标签）。",
+    "观察 Network 面板：确认 GET 改密请求已发送。",
+    "验证攻击成功：用新密码登录（hacked）。",
+    "尝试防御：切换到 High 关卡，体验 token 防护。"
+  ],
+  "whySafe": [
+    "GET 改状态是 CSRF 的典型入口（容易被诱导）。",
+    "CSRF token 是第二道防线，但不能替代 XSS 防护。",
+    "SameSite Cookie 降低跨站攻击风险，但不能完全防止。"
+  ],
+  "allowedToTell": [
+    "可以解释：GET vs POST 的安全差异。",
+    "可以提示：Image 标签自动触发请求的特点。",
+    "可以提示：短链接服务（如站长之家）如何伪造 URL。",
+    "可以给防御建议：POST + token + SameSite。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：能通过 evil 页面成功修改受害者密码。",
+    "VULN：理解 GET 改密的风险。",
+    "VULN：理解跨站诱导的攻击链。"
+  ],
+  "doNotTell": [
+    "不要建议窃取真实系统的敏感信息。",
+    "不要提供真实系统的攻击 URL。"
+  ],
+  "references": [
+    "OWASP Cross-Site Request Forgery Prevention Cheat Sheet",
+    "PortSwigger Web Security Academy - CSRF"
+  ]
+}

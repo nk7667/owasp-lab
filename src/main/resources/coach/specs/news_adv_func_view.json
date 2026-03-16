@@ -1,0 +1,67 @@
+{
+  "context": "news_adv_func_view",
+  "title": "SQLi · 新闻搜索（进阶：结构位表达式 + 视图别名）",
+  "goal": "以渗透验证为主：确认 q 已参数化（传统闭合引号/UNION 在 q 上失效）；转而识别并利用 titleExpr（结构位表达式）入口，从 vw_accounts 视图回显 alias_username/alias_email 等信息；最后对照 SAFE 的 titleMode 白名单映射如何阻断结构位注入。",
+  "vuln": {
+    "summary": "VULN 侧对 q 使用参数化 LIKE，但把 titleExpr 作为 SELECT 列表达式直接拼接到 SQL 结构中（结构位注入），导致可通过表达式/子查询读取 vw_accounts 视图的数据并回显到 title 列。",
+    "impact": [
+      "结构位注入：即使所有值参数都参数化，仍可能因列/函数/表达式等结构片段拼接导致注入。",
+      "数据泄露：可将 vw_accounts.alias_username/alias_email 映射到返回的 title/snippet 回显列。",
+      "排查困难：当表达式不合法/返回多行多列时，查询可能报错；靶场对外统一返回固定结构，需结合服务端日志定位原因。"
+    ],
+    "whatToObserve": [
+      "同一关键字 q 下，titleMode/raw|lower|upper 会改变 title 的展示形态（正常功能）。",
+      "在 VULN 下提供 titleExpr 后，title 列内容出现“非 news.title 的值”，说明结构位已被接管（成功信号）。",
+      "目标表不再直接叫 users，而是视图 vw_accounts，字段为 alias_username/alias_email/alias_created_at。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE 侧保持 q 参数化，并将 titleMode 限制为枚举（raw/lower/upper）映射到固定表达式（title/LOWER(title)/UPPER(title)），不接收任意 titleExpr，因此无法注入结构片段。",
+    "keyControls": [
+      "q：参数化 LIKE（title LIKE ?，绑定 %q%）。",
+      "结构位白名单：titleMode → 固定表达式映射；不拼接用户输入的任意 SQL 表达式。",
+      "统一错误：对外不回显 SQL 异常细节，避免成为额外信道。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": ["/api/v1/sqli/vuln/news/adv/search", "/api/v1/sqli/safe/news/adv/search"],
+  "notices": [
+    "难度 2 的关键不是闭合引号，而是识别“注入上下文已从值位置转到结构位置（表达式位）”。",
+    "先验证 q 的注入是否失效（参数化），再把精力转到 titleExpr 的可控性验证。",
+    "前置条件：q 必须命中新闻标题，否则无论 titleExpr 如何变化都不会有回显行（这是过滤条件，不是信号）。",
+    "排查路径：当看到 items=[] 时，优先检查 titleExpr 是否是合法表达式、是否返回标量（单行单列），以及服务端日志中的异常原因。"
+  ],
+  "nextSteps": [
+    "基线：不传 titleExpr，仅切换 titleMode=raw/lower/upper，确认这是一个“看起来正常”的展示变体功能。",
+    "验证 q 安全：在 q 中尝试传统闭合引号/UNION/注释 payload，确认不会改写 SQL 结构（与难度1对照）。",
+    "前置确认：把 q 设为能命中的关键词（例如“新闻/公开/OWASP”），避免因为过滤条件未命中导致误判。",
+    "验证结构位入口：在 VULN 侧传入 titleExpr=title、CONCAT('X-',title)、COALESCE(title,'X')，观察 title 回显变化。",
+    "转向跨表目标：将 titleExpr 替换为从 vw_accounts 读取 alias_username/alias_email 的标量子查询，并观察回显。",
+    "类型对齐/序列化排坑：若表达式返回非文本类型，尝试显式 CAST 为 VARCHAR/TEXT（按方言调整）。",
+    "对照 SAFE：同样操作在 SAFE 下只能通过 titleMode 生效，无法注入任意 titleExpr。"
+  ],
+  "whySafe": [
+    "SAFE 将结构位选择限制为枚举映射（模板/白名单），用户输入不会直接进入 SQL 结构。",
+    "q 参数化使其永远只作为数据参与匹配，不能闭合引号或拼接 UNION/注释等结构片段。"
+  ],
+  "allowedToTell": [
+    "可以解释“结构位注入”的识别方式：看哪个参数影响 SELECT 列/函数/表达式/排序等结构片段。",
+    "可以提示目标视图与字段名：vw_accounts(alias_username, alias_email, alias_created_at)。",
+    "可以提示排查思路：q 必须命中；表达式必须返回单值；不合法表达式会导致查询失败但对外不回显细节。",
+    "可以给出 profile 级别的语法差异提示（不直接给出最终 payload）：H2 常用 CONCAT/CAST(... AS VARCHAR)，MySQL 常用 CONCAT/CAST(... AS CHAR)，Postgres 常用 ||/CAST(... AS TEXT)。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：通过 titleExpr 使返回的 title 列出现 vw_accounts.alias_username 或 alias_email（或其子串）等跨表数据。",
+    "SAFE：titleMode 仅允许 raw/lower/upper 映射；无法通过任意表达式改变 SQL 结构或回显跨表数据。",
+    "一致性：两条接口返回结构保持一致（items/count/meta），并能通过 meta.context 区分关卡。"
+  ],
+  "doNotTell": [
+    "不要输出/推断任何 flag 值。",
+    "不要建议回显或记录 Cookie/JSESSIONID、Authorization、明文密码等敏感信息。"
+  ],
+  "references": [
+    "PortSwigger Web Security Academy - SQL injection UNION attacks (general)",
+    "OWASP SQL Injection Prevention Cheat Sheet (general)"
+  ]
+}
+

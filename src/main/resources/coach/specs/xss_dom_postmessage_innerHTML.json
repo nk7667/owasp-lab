@@ -1,0 +1,60 @@
+{
+  "context": "xss_dom_postmessage_innerHTML",
+  "title": "XSS · DOM（PostMessage 链：iframe → postMessage → parent innerHTML）",
+  "goal": "理解 DOM XSS/跨窗口信任边界：子页面通过 postMessage 发送数据，父页面把 message 当作 HTML 写入（sink=innerHTML）。对比 VULN/WEAK/SAFE：VULN 无 origin 校验且 innerHTML；WEAK-1 错误地信任 origin='null'；WEAK-2 额外做黑名单过滤（仅拦 <script/javascript:，可被 <img onerror>/<svg onload> 绕过，参考 XSS-Sec）；SAFE 只接受同源并使用 textContent。",
+  "vuln": {
+    "summary": "VULN：父页面监听 message 后直接 innerHTML 写入，且缺少 origin 校验，导致攻击者可通过可控 iframe/消息内容触发 DOM XSS。",
+    "impact": [
+      "DOM 链路执行：不依赖后端 JSON 接口回显，攻击发生在浏览器端。",
+      "信任边界问题：postMessage 是跨源通道，必须校验 origin/source。"
+    ],
+    "whatToObserve": [
+      "VULN/WEAK 下 out 区域使用 innerHTML，消息内容可能被当作 HTML 解释。",
+      "SAFE 下 out 使用 textContent，消息只会以文本显示。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：只接收来自本页创建 iframe 的消息；严格校验 e.origin 等于当前 origin；并用 textContent 写入，避免把数据解释为 HTML。",
+    "keyControls": [
+      "校验 source/origin：只信任预期窗口与同源消息。",
+      "安全 sink：用 textContent 而不是 innerHTML。",
+      "防噪：只接收字符串消息，避免开发环境插件污染训练信号。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/dom/postmessage/page",
+    "/api/v1/xss/weak/dom/postmessage/page",
+    "/api/v1/xss/safe/dom/postmessage/page"
+  ],
+  "notices": [
+    "这关主要发生在前端 DOM：即使没有新的后端 API 请求，也可以通过前端训练事件上报（/api/v1/coach/event）让 Coach 看到你的操作轨迹。",
+    "建议先用页面内“自测：直接写入 out”确认 out 区域链路正常，再尝试从 iframe postMessage 触发。"
+  ],
+  "nextSteps": [
+    "在 VULN 模式下，用 data: iframe 发送 postMessage，观察 out 是否按 HTML 渲染。",
+    "切到 WEAK-1：观察其错误修复（信任 origin='null'）为什么仍危险。",
+    "切到 WEAK-2：观察黑名单只拦 <script/javascript: 时，为什么 <img onerror>/<svg onload> 仍能触发。",
+    "切到 SAFE：同样消息应仅以文本显示，不被解释为 HTML。"
+  ],
+  "whySafe": [
+    "postMessage 是跨源通信，必须验证消息来源（origin/source）。",
+    "innerHTML 会把数据当作 HTML 解释；textContent 把数据当作文本。"
+  ],
+  "allowedToTell": [
+    "可以解释：source/sink（postMessage → innerHTML）的链路与信任边界。",
+    "可以提示：SAFE 的修复点是 origin allowlist + textContent。"
+  ],
+  "acceptanceCriteria": [
+    "VULN/WEAK：能观察到 out 区域的危险写入行为差异。",
+    "SAFE：消息只显示为文本，不执行。"
+  ],
+  "doNotTell": [
+    "不要指导窃取真实敏感信息。"
+  ],
+  "references": [
+    "OWASP DOM Based XSS Prevention Cheat Sheet",
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

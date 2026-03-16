@@ -1,0 +1,63 @@
+{
+  "context": "ssrf_image_download",
+  "title": "SSRF · 图片代理与文件下载（内网探测）",
+  "goal": "通过 image-proxy / download 两类接口理解：当后端帮用户“拉取远程图片/文件”时，如果没有主机/IP/路径限制，会演变成 SSRF 通道，可探测内网服务并下载敏感资源。",
+  "vuln": {
+    "summary": "VULN：image-proxy 与 download 接口直接使用 imageUrl/fileUrl 参数访问远程资源，对目标主机/IP/协议没有限制，攻击者可构造指向 127.0.0.1:8081 或内网服务的 URL。",
+    "impact": [
+      "内网端点探测：构造不同路径观察响应/错误差异，用于枚举内部 API。",
+      "本地文件下载：若 download 支持 file:// 或本地路径，将导致任意文件读取。",
+      "链式利用：结合开放重定向或本地服务，将 SSRF 扩展为更复杂的攻击链。"
+    ],
+    "whatToObserve": [
+      "VULN 模式下，请求 http://127.0.0.1:8081/api/v1/ssrf/internal/metadata 是否能在响应 body 中看到 meta-data。",
+      "VULN 模式下，请求指向不存在服务/端口的 URL 时，错误信息是否泄露底层 HTTP 客户端/网络栈细节。",
+      "不同 weakLevel 下，image-proxy 与 download 对主机/IP/扩展名的约束是否有所变化。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：对图片代理和文件下载分别限制协议/主机/路径：图片仅允许 http(s) + 受控图床域名；下载仅允许固定前缀目录或白名单扩展名，拒绝内网 IP 与任意路径访问。",
+    "keyControls": [
+      "图片代理：仅允许来自受信任 CDN/图床域名的 http(s) 请求，拒绝裸 IP 和内网网段。",
+      "文件下载：只允许从固定根目录读取文件，使用路径规范化并拒绝 .. 等上跳片段。",
+      "统一错误处理：对外隐藏底层网络/文件错误细节，仅返回业务级错误信息。"
+    ]
+  },
+  "signals": [
+    "inband",
+    "ssrf"
+  ],
+  "routeHints": [
+    "/api/v1/ssrf/image-proxy/VULN",
+    "/api/v1/ssrf/image-proxy/SAFE",
+    "/api/v1/ssrf/download/VULN",
+    "/api/v1/ssrf/download/SAFE"
+  ],
+  "notices": [
+    "本关假设 image-proxy / download 返回的是结构化 JSON 而非二进制流，方便在前端教学界面中直接展示响应。",
+    "真实生产环境中，图片代理往往牵扯缓存、鉴权和带宽控制，本关只聚焦 SSRF 相关的主机/IP 限制。"
+  ],
+  "nextSteps": [
+    "在 VULN 模式下，用正常公网图片 URL 或文件 URL 验证基础功能。",
+    "在 VULN 模式下，请求 http://127.0.0.1:8081/api/v1/ssrf/internal/metadata，确认能通过图片/文件接口访问到内部端点。",
+    "尝试将目标换成 127.0.0.1:非 8081 端口，观察错误信息与响应差异，用于理解“内网探测”能力。",
+    "切换到 SAFE/较高 weakLevel 模式，重复上述请求，验证内网 IP 或非白名单主机被拒绝。"
+  ],
+  "whySafe": [
+    "图片代理与文件下载本质上都是“由服务端请求远程资源”，与 fetch 类 SSRF 具有相同风险，应采用一致的主机/IP 限制策略。",
+    "对文件下载来说，将访问路径限制在单一根目录并做路径规范化，是防止目录遍历与任意文件读取的基础措施。"
+  ],
+  "allowedToTell": [
+    "可以解释：为什么裸 IP / 内网 IP 对 SSRF 风险更大。",
+    "可以提示：如何在实际项目中为图片代理和文件下载分别设计 URL/路径白名单。"
+  ],
+  "acceptanceCriteria": [
+    "VULN 模式下，能够通过 image-proxy 或 download 成功命中内部 metadata 接口。",
+    "SAFE 模式下，同样 payload 不再命中内部端点，只允许访问有限的外部资源。"
+  ],
+  "doNotTell": [
+    "不要建议将生产环境中的真实文件路径暴露到前端。",
+    "不要指导将 SSRF 用于攻击真实内网环境，仅限靶场环境。"
+  ]
+}
+

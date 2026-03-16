@@ -1,0 +1,60 @@
+{
+  "context": "where_login_bypass",
+  "title": "SQLi · 登录绕过",
+  "goal": "以渗透验证为主：在 VULN 上复现登录绕过并识别“认证态/会话”的成功信号；再理解 SAFE 的参数化 + 哈希校验(matches) + 失败锁定 + 审计日志如何形成防护闭环。",
+  "vuln": {
+    "summary": "VULN 侧将 username/password 直接拼接到 SQL 字符串中执行（动态 SQL），导致输入被当成 SQL 语法的一部分解析，进而改变 WHERE 条件语义。",
+    "impact": [
+      "认证绕过：无需掌握真实密码即可命中某个用户记录（从而建立会话/获得权限相关信息）。",
+      "枚举与探测：通过错误回显/响应差异推断字段、语法或数据库行为（取决于实现的 error handling）。",
+      "放大攻击面：一旦与“会话建立、鉴权、越权”链路耦合，影响会扩散到其他关卡/接口。"
+    ],
+    "whatToObserve": [
+      "输入变化是否能影响查询结构（比如 WHERE 条件是否被改写、是否出现注释截断效果）。",
+      "meta.signalChannel 与 debug 字段：VULN 常见为 inband 或 error_based（用于教学对比）。",
+      "若 VULN 登录成功，是否建立了 session（JSESSIONID/服务端 session attribute）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE 侧把“防注入”和“认证安全”拆开实现：SQL 使用参数化/ORM，密码在应用层做哈希校验，并配套锁定与审计。",
+    "keyControls": [
+      "SQL：只按 username 查询用户，不在 SQL 中比对明文 password。",
+      "密码：使用 PasswordEncoder.matches(明文, hash) 校验；数据库不存明文密码。",
+      "锁定：连续失败达到阈值后短时 LOCKED；LOCKED 时 message 保持统一（降低枚举风险）。",
+      "审计：记录 AUTH_LOGIN_{LOCKED|FAIL|SUCCESS}，日志不包含 password/sql/payload/cookie/token。",
+      "Debug：SAFE 仅回显 sqlTemplate + params（对敏感字段做 <redacted>），不回显拼接 SQL。"
+    ]
+  },
+  "signals": ["inband", "error_based", "locked"],
+  "routeHints": ["/api/v1/sqli/vuln/login", "/api/v1/sqli/safe/login"],
+  "notices": [
+    "关注点不是“查到用户信息”，而是“是否建立认证态/会话、是否存在用户枚举、是否有锁定与审计”。",
+    "LOCKED 时对外 message 应保持统一（例如仍是“登陆失败”），避免通过提示差异枚举用户名。",
+    "靶场可回显 debug 便于教学，但不要回显 password/cookie/token 等敏感信息。"
+  ],
+  "nextSteps": [
+    "在 VULN 登录接口上尝试 payload 变体（例如 admin' --、admin' OR '1'='1'--），并用响应体中的 success/user 字段判断是否绕过成功；同时关注 debug.sql（仅用于教学）。",
+    "用相同 payload 请求 SAFE 登录接口，确认注入失效；若出现 failCount/locked/retryAfterSeconds，记录锁定信号与对外 message 的一致性（避免账号枚举）。",
+    "审计检查：在服务端日志中确认出现 AUTH_LOGIN_{LOCKED|FAIL|SUCCESS}，且日志字段只包含 mode/ctx/username/ip（不含 password/sql/payload/cookie/token）。"
+  ],
+  "whySafe": [
+    "SAFE 不将用户输入拼接进 SQL（参数化/ORM），SQLi 无法改变 WHERE 结构。",
+    "SAFE 不在 SQL 中校验明文密码：先按 username 查用户，再用 PasswordEncoder.matches(明文, hash) 做哈希校验，数据库不存明文。",
+    "SAFE 增加失败锁定与审计日志，降低爆破与探测效率，并提升可溯源性。"
+  ],
+  "allowedToTell": [
+    "如何看 meta：module/mode/context 用于定位关卡；signalChannel 用于理解“信号来自哪里”（inband=直接回显；error_based=错误差异；locked=锁定状态）。",
+    "如何验证锁定：连续失败达到阈值后观察 debug.locked/retryAfterSeconds/failCount；LOCKED 时仍返回统一 message（避免枚举）。",
+    "如何看 debug：VULN 可能回显 debug.sql（用于教学）；SAFE 应回显 debug.sqlTemplate + debug.params（敏感字段应 <redacted>）。"
+  ],
+  "acceptanceCriteria": [
+    "SAFE：正确账号密码应成功，且服务端建立会话（JSESSIONID/Session attribute）。",
+    "SAFE：连续失败达到阈值后进入 LOCKED，响应 debug.locked=true 且 retryAfterSeconds>0；LOCKED 时 message 仍为“登陆失败”。",
+    "审计日志：应出现 AUTH_LOGIN_{LOCKED|FAIL|SUCCESS} 事件；日志不包含 password/sql/payload/cookie/token。",
+    "Debug：SAFE 不回显拼接 SQL；敏感字段必须脱敏（<redacted>）。"
+  ],
+  "doNotTell": [
+    "不要输出/推断任何 flag/secret 值。",
+    "不要建议记录或回显 Cookie/JSESSIONID、Authorization、明文密码。"
+  ]
+}

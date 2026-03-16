@@ -1,0 +1,4 @@
+# LAB_HOSTS_OK - 这是测试标记
+127.0.0.1 localhost
+192.168.1.1 router
+10.0.0.1 internal-server

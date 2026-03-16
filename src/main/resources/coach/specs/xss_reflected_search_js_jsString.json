@@ -1,0 +1,62 @@
+{
+  "context": "xss_reflected_search_js_jsString",
+  "title": "XSS · 反射型（企业搜索页：JS 字符串 → analyticsConfig）",
+  "goal": "识别 JavaScript 上下文的注入：后端返回 `analyticsConfig`（形如 `{ \"event\": \"search\", \"q\": \"<q>\" }`），前端会把它直接拼进 `<script>`：`const cfgObj = ${analyticsConfig};`（sink=jsString / script 内执行上下文）。对比 VULN/WEAK/SAFE：VULN 直接拼接，`q` 可闭合字符串并逃逸到可执行代码；WEAK 只做最小黑名单替换（挡 `<script` / 去掉 `javascript:`）但完全不处理引号/反斜杠/换行；SAFE 使用 JS string escaping（`\\`、`\"`、`\\'`、`\\r`、`\\n`）确保 `q` 只能作为字符串值。",
+  "vuln": {
+    "summary": "VULN：把 `q` 直接拼进 `analyticsConfig` 的 `\"q\": \"...\"` 中，且前端把 `analyticsConfig` 当作 JS 表达式执行；因此可通过闭合引号/对象字面量并追加语句触发脚本执行。",
+    "impact": [
+      "脚本执行：在某些渲染/执行路径中可触发任意 JS。",
+      "排查困难：同样的字符串在 HTML/JS 上下文含义不同，错误的编码会造成漏洞。"
+    ],
+    "whatToObserve": [
+      "参数：`q` + `target=js`。",
+      "响应字段：`analyticsConfig`。",
+      "前端预览：脚本里会出现 `const cfgObj = <analyticsConfig>;`，若结构被破坏可能出现控制台报错；若成功逃逸则出现可观测行为（弹窗/DOM 变化）。",
+      "WEAK：可能“看起来清洗了 <script>”，但对 `\"`、`\\`、换行等 JS 关键字符完全没处理。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：对 `q` 做 JS string escaping（不是 HTML 转义），让它只能作为 `\"q\"` 的字符串值；同时当 `target` 不是 `all` 时，服务端会把 `analyticsConfig` 强制降级为安全对象，避免被非目标落点抢跑触发。",
+    "keyControls": [
+      "JS 上下文：使用 JS string escaping（不是 HTML 转义）。",
+      "变量只出现在 quoted data value：不要拼到脚本结构/关键字/表达式位置。",
+      "WEAK 教学：把 HTML 弱清洗结果直接塞进 JS 字符串属于典型错误修复。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/search/results",
+    "/api/v1/xss/weak/search/results",
+    "/api/v1/xss/safe/search/results"
+  ],
+  "notices": [
+    "JS 字符串上下文与 HTML 上下文不同：同样的输入需要不同编码策略。",
+    "WEAK 的真实行为是最小黑名单替换（改写 `<script`、移除 `javascript:`），但它不会做 JS string escaping（引号/反斜杠/换行），因此仍可能改变脚本结构。",
+    "训练时建议先锁定 `target=js`：当 `target` 不是 `all` 时，服务端会把非目标落点强制降级为 SAFE，避免混叠信号。"
+  ],
+  "nextSteps": [
+    "选择 target=js，输入普通关键字观察 analyticsConfig 的结构。",
+    "VULN：尝试引号/反斜杠/换行等会影响 JS 字符串结构的输入，观察解析/预览是否异常。",
+    "WEAK：先做对照：<script 字面量会被变形；再做对照：引号/反斜杠/换行仍未被转义（JS string escaping 缺失），因此结构仍可能被改变。",
+    "SAFE：同样输入应被转义为字符串内容，不改变结构。"
+  ],
+  "whySafe": [
+    "XSS 的关键是“上下文正确编码”。JS 字符串必须用 JS escaping，不能用 HTML escaping 代替。",
+    "将不可信数据限制在 quoted data value，可以显著降低注入风险。"
+  ],
+  "allowedToTell": [
+    "可以提示：重点观察 analyticsConfig 字段，判断输入是否改变了 JS 结构。",
+    "可以提示：SAFE 的关键是转义引号/反斜杠/换行。"
+  ],
+  "acceptanceCriteria": [
+    "VULN 或 WEAK：能说明输入如何影响 JS 字符串结构（例如闭合/断行）。",
+    "SAFE：输入仅作为字符串值出现，不影响结构。"
+  ],
+  "doNotTell": [
+    "不要指导窃取真实敏感信息。"
+  ],
+  "references": [
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

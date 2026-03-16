@@ -1,0 +1,62 @@
+{
+  "context": "xxe_dom_documentbuilder",
+  "title": "XXE · DOM DocumentBuilder（外部实体 → 文件读取 / SSRF / DoS）",
+  "goal": "理解基于 DocumentBuilderFactory 的 XXE：VULN 使用默认配置，允许 DOCTYPE / 外部实体，从而通过 file:// / http(s):// / 内网地址实现文件读取、SSRF 或 DoS；SAFE 明确禁用 DTD 与外部实体，观察三类 payload 在 VULN/SAFE 下行为差异。",
+  "vuln": {
+    "summary": "VULN：直接 newInstance() + newDocumentBuilder()，未设置任何安全特性，导致解析 XML 时会解析 DOCTYPE 与外部实体（SYSTEM 实体），从而访问 file://、http:// 或内网地址。",
+    "impact": [
+      "文件读取：利用 SYSTEM \"file:///path\" 把服务器本地文件内容注入到 XML 节点（例如 <name>&xxe;</name>）。",
+      "SSRF / 外带：利用 SYSTEM \"http://127.0.0.1:port/...\" 让解析器在服务器侧主动发起 HTTP 请求，打内网服务或外带数据。",
+      "DoS：Billion Laughs 等实体递归膨胀攻击，导致 CPU/内存耗尽。"
+    ],
+    "whatToObserve": [
+      "VULN 模式下，file:///etc/passwd 等 payload 能在解析结果中看到文件内容片段（name/email 字段异常）。",
+      "VULN 模式下，指向 http://127.0.0.1/... 的实体会在服务端发起请求（可配合本地监听端口观察）。",
+      "Billion Laughs 在 VULN 下可能导致解析超时或异常，而 SAFE 下会在更早阶段拒绝 DTD。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：在创建 DocumentBuilderFactory 时显式关闭 DTD/外部实体相关特性（disallow-doctype-decl / external-general-entities / external-parameter-entities / XInclude / expandEntityReferences），从源头阻断 XXE 攻击面。",
+    "keyControls": [
+      "显式禁用 DOCTYPE：factory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true)。",
+      "禁用外部实体：external-general-entities、external-parameter-entities 设为 false，XIncludeAware=false，expandEntityReferences=false。",
+      "仅从业务角度读取需要的节点（name/email），不依赖实体展开行为。"
+    ]
+  },
+  "signals": [
+    "inband",
+    "ssrf",
+    "dos"
+  ],
+  "routeHints": [
+    "/api/v1/xxe/parse-vuln",
+    "/api/v1/xxe/parse-safe"
+  ],
+  "notices": [
+    "本关只演示基于 DOM DocumentBuilder 的 XXE，重点在“解析配置差异”，不是 SSRF 本身的所有变体。",
+    "建议先在 VULN 模式下用普通 XML 确认解析链路正常，再依次尝试 文件读取 / SSRF / DoS 三类 payload，对比 SAFE 行为。"
+  ],
+  "nextSteps": [
+    "VULN 模式：发送带 SYSTEM \"file:///etc/passwd\" 的实体，观察解析结果中 name/email 字段是否包含敏感文件内容片段。",
+    "VULN 模式：发送指向本机监听端口的 http://127.0.0.1/xxe-test 实体，在本地 HTTP 服务中捕获来自服务器侧的请求（SSRF）。",
+    "VULN 模式：尝试 Billion Laughs（多层实体嵌套）观察解析性能/异常，再切到 SAFE 模式对比。",
+    "SAFE 模式：对同样 payload，验证解析器是否直接拒绝 DTD/外部实体，并只返回业务字段或失败信息，而不泄露文件内容/发起 SSRF。"
+  ],
+  "whySafe": [
+    "禁用 DOCTYPE 与外部实体可以从源头上让 XML 解析器“看不到”攻击者自定义的外部实体声明，使 file:// / http:// 不再在解析阶段被访问。",
+    "SAFE 配置只保留应用真正需要的 XML 功能（读取简单节点），不会依赖实体展开，从而在功能完整的前提下消除 XXE 攻击面。"
+  ],
+  "allowedToTell": [
+    "可以解释：DocumentBuilderFactory 的相关安全特性以及它们各自防住的是哪种 XXE 向量（file-read、SSRF、DoS）。",
+    "可以提示：生产环境应统一封装安全的 XML 工具方法，避免业务代码直接 new DocumentBuilderFactory()."
+  ],
+  "acceptanceCriteria": [
+    "学员能在 VULN 模式下用外部实体成功读取本地文件或触发 SSRF，再在 SAFE 模式下验证同样 payload 不再生效。",
+    "能说清楚至少两条关键安全配置的作用（例如 disallow-doctype-decl / external-general-entities=false）。"
+  ],
+  "doNotTell": [
+    "不要指导读取真实生产环境中敏感配置文件的完整路径（仅限靶场与本地测试）。",
+    "不要提供与具体云厂商元数据服务等真实目标强绑定的 payload，仅以 127.0.0.1 等本地/示例地址说明。"
+  ]
+}
+

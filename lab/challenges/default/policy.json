@@ -1,0 +1,14 @@
+{
+  "id": "default",
+  "title": "默认策略（最严格）",
+  "allowedCommands": ["ping", "ls", "grep", "cat"],
+  "safeFiles": ["hosts", "app.log", "passwd.mock"],
+  "allowLsOptionLa": true,
+  "grepAllowRegex": false,
+  "grepKeywordPattern": "^[a-zA-Z0-9._-]+$",
+  "hostPattern": "^[a-zA-Z0-9.-]+$",
+  "pathPattern": "^[a-zA-Z0-9._/-]+$",
+  "weakenPathTraversal": false,
+  "transformRemoveSpaces": false,
+  "transformDecodeUrl": false
+}

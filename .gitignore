@@ -1,0 +1,25 @@
+# ---- Java / Maven ----
+target/
+**/target/
+*.class
+*.log
+
+# ---- Node / Vite (frontend) ----
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/.env*
+
+# ---- IDE / Editor ----
+.idea/
+*.iml
+.vscode/
+.cursor/
+
+# ---- Local caches ----
+.m2repo/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db

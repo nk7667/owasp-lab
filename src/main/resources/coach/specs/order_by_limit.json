@@ -1,0 +1,59 @@
+{
+  "context": "order_by_limit",
+  "title": "SQLi · ORDER BY 与可见范围（LIMIT）边界",
+  "goal": "以渗透验证为主：在 VULN 上验证 ORDER BY 结构拼接可被操控（边界绕过/错误探测/列序号探测），再理解 SAFE 的允许列表映射与固定 LIMIT 如何收敛攻击面。",
+  "vuln": {
+    "summary": "VULN 侧把用户可控的列名/排序方向等“SQL 标识符片段”直接拼接到语句中。由于表名/列名/方向通常无法作为 bind 参数，若缺少允许列表映射，用户输入可能影响 SQL 结构（不仅是值）。",
+    "impact": [
+      "边界绕过：可见范围（如 LIMIT 3）可能被扩大/失效，导致超出预期的数据暴露。",
+      "探测与枚举：通过错误差异或回显，推断字段名、数据库行为或语句结构。",
+      "安全错觉：即便 WHERE 条件参数化，若 ORDER BY 等结构片段仍拼接，仍可能存在注入风险。"
+    ],
+    "whatToObserve": [
+      "输入的 sortField/sortOrder 是否会直接出现在 debug.sql（拼接后的 SQL）。",
+      "非法列名/语法是否触发 error_based 信号（meta.signalChannel=error_based）。",
+      "不注入时是否稳定保持 LIMIT 边界（最多返回固定条数）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE 侧对无法参数化的 SQL 片段采用允许列表（allow-list）映射：前端只传枚举值，后端映射到固定列名；方向仅允许 asc/desc；LIMIT 固定由后端控制。",
+    "keyControls": [
+      "允许列表：列名/方向使用白名单映射或枚举（绝不直接拼接原始用户输入）。",
+      "参数化：能参数化的值仍使用绑定参数；不能参数化的标识符通过映射解决。",
+      "边界固定：LIMIT/分页大小由后端固定控制，不允许用户输入参与结构拼装。",
+      "错误处理：异常统一返回结构化响应；SAFE debug 仅回显 sqlTemplate + whitelist 选择信息。"
+    ]
+  },
+  "signals": ["inband", "error_based"],
+  "routeHints": ["/api/v1/sqli/vuln/users/list", "/api/v1/sqli/safe/users/list"],
+  "notices": [
+    "ORDER BY 的列名/方向属于“SQL 结构片段”，通常不能用占位符直接绑定；需要允许列表映射或重构查询。",
+    "只做黑名单过滤（关键字/符号）不可靠，允许列表映射更稳定。",
+    "边界（LIMIT）应由后端固定控制；把边界交给用户输入会放大数据暴露风险。"
+  ],
+  "nextSteps": [
+    "验证默认边界：不做异常输入时，返回条数应稳定受 LIMIT 约束。",
+    "验证 error_based：传入非法列名/非法方向，观察 meta.signalChannel 是否为 error_based，并比较 VULN/SAFE 的 debug 回显差异。",
+    "验证列序号探测：在 VULN 上尝试 sortField=1/2/3/4/5，观察何时触发 error_based（用于理解 ORDER BY 在注入链路里的“结构探测”作用）。",
+    "验证 SAFE 白名单：SAFE 只接受枚举列与 asc/desc，其余回退默认值；debug 应回显 sqlTemplate 与映射后的选择。"
+  ],
+  "whySafe": [
+    "SAFE 采用允许列表映射把用户输入转换为受控的列名/方向，从根源上消除结构注入面。",
+    "SAFE 把 LIMIT 固定在后端，确保可见范围边界不被用户输入影响。",
+    "SAFE 对异常做统一处理，避免将数据库细节通过错误回显泄露给客户端。"
+  ],
+  "allowedToTell": [
+    "为什么标识符不能参数化：PreparedStatement 主要绑定“值”，表名/列名/排序方向通常需要通过允许列表映射或查询重构（OWASP SQLi Prevention 的 allow-list 建议）。",
+    "如何设计 allow-list：让前端只传枚举（1/2/3/4），后端 switch 映射到固定列名；方向仅允许 asc/desc。",
+    "如何做对照验证：SAFE 应保持 LIMIT/字段边界稳定，VULN 在 debug/sql 或错误差异上会体现结构受输入影响。"
+  ],
+  "acceptanceCriteria": [
+    "SAFE：sortField/sortOrder 非法输入不会进入 SQL 结构；返回条数受固定 LIMIT 控制。",
+    "SAFE：debug 回显为 sqlTemplate + whitelist 选择信息（不回显拼接 SQL）。",
+    "VULN：存在可观测的结构拼接点（用于教学对照），并可通过 meta/signalChannel 与 debug 解释其风险。"
+  ],
+  "doNotTell": [
+    "不要输出/推断任何 flag/secret 值。",
+    "不要建议记录或回显 Cookie/JSESSIONID、Authorization、明文密码。"
+  ]
+}

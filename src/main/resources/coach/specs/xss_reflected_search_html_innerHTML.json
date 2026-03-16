@@ -1,0 +1,62 @@
+{
+  "context": "xss_reflected_search_html_innerHTML",
+  "title": "XSS · 反射型（企业搜索页：HTML 内容 → innerHTML）",
+  "goal": "识别企业搜索页里的 HTML 内容落点：`q` 会进入 `highlightHtml` 与 `emptyStateHtml`（并在 `items[].snippet` 中拼接），前端会把这些字段当作 HTML 内容展示（sink=innerHTML）。对比 VULN/WEAK/SAFE：VULN 直接拼接导致可执行；WEAK 只做最小黑名单替换（挡 `<script` / 去掉 `javascript:`）但仍可绕过；SAFE 使用 HTML entity encoding（例如 `HtmlUtils.htmlEscape`）让输入只能作为文本显示。",
+  "vuln": {
+    "summary": "VULN：将用户输入 q 直接拼到 HTML 内容中（如 <mark>q</mark> 或空状态文案），前端在预览区以 HTML 渲染，导致反射型 XSS。",
+    "impact": [
+      "任意脚本执行：可窃取信息、冒充用户操作、加载外部内容等。",
+      "信号直观：payload 是否执行可直接观察（弹窗/DOM 变化）。"
+    ],
+    "whatToObserve": [
+      "参数：`q` + `target=html`。",
+      "响应字段：`highlightHtml`、`emptyStateHtml`；当 `target=html`（或 `all`）时，`items[].snippet` 会包含 `命中片段：` + `highlightHtml`。",
+      "同一 payload 在 VULN/WEAK/SAFE 三种 mode 下的执行结果不同（mode 在 meta.mode）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：按 HTML 内容上下文进行输出编码（HTML entity encoding，例如 `HtmlUtils.htmlEscape`），让输入只作为文本显示；避免把不可信数据交给 innerHTML 解释为标签/事件。",
+    "keyControls": [
+      "HTML 内容上下文：对不可信数据做 HTML 转义（& < > \" '）。",
+      "避免危险 sink：不要用 innerHTML 渲染不可信数据；优先 textContent/React 默认转义。",
+      "WEAK 教学：只替换 `<script`、只去掉 `javascript:` 不是系统性修复，事件属性/其他标签仍可能触发。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/search/results",
+    "/api/v1/xss/weak/search/results",
+    "/api/v1/xss/safe/search/results"
+  ],
+  "notices": [
+    "这是同一关卡的三种实现：VULN/WEAK/SAFE。context 固定，mode 通过 meta.mode 区分。",
+    "WEAK 的真实行为是“最小黑名单替换”：把 `<script` 变形为 `<scr_ipt`，并移除 `javascript:` 字面量。它不会系统性处理事件属性/其它标签，因此仍可能被绕过。",
+    "为了避免“多落点同时触发”导致因果混淆：当 `target` 不是 `all` 时，服务端会把“非目标落点”强制降级为 SAFE（即使在 VULN/WEAK mode 下也一样）。因此要练 HTML 落点请使用 `target=html`（或 `all`）。"
+  ],
+  "nextSteps": [
+    "起点：target=html，输入一个普通关键词观察高亮/空状态区域。",
+    "VULN：尝试“会进入 HTML 内容区域”的输入，观察是否执行（弹窗/DOM 变化）。",
+    "WEAK：先做对照：script 标签类输入会被变形（<script→<scr_ipt）；再做对照：事件属性/非 script 载体仍可能触发，从现象推回“黑名单不足”。",
+    "SAFE：同样输入应只显示为文本，不应执行。"
+  ],
+  "whySafe": [
+    "XSS 防护需要“上下文正确的输出编码/安全 sink”。黑名单过滤易被变体绕过。",
+    "将不可信数据留在“数据槽位”里（被转义/被当文本），浏览器就不会把它当代码执行。"
+  ],
+  "allowedToTell": [
+    "可以解释：HTML 内容上下文使用 HTML entity encoding；属性/JS 字符串/URL 需要不同编码策略。",
+    "可以提示：先用 target=html 定位单一落点，再切换到 attr/js 练其他上下文。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：在 target=html 下能观察到 payload 执行或 DOM 行为变化。",
+    "WEAK：能解释为什么“挡 <script>”仍不等于安全。",
+    "SAFE：同样输入只显示为文本，不执行脚本。"
+  ],
+  "doNotTell": [
+    "不要指导窃取真实敏感信息（Cookie/Token/密码）。"
+  ],
+  "references": [
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

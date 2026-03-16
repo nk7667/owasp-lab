@@ -1,0 +1,62 @@
+{
+  "context": "xss_csp_jsonp_gadget",
+  "title": "XSS · DOM/策略（CSP 禁 inline + 同源 JSONP gadget）",
+  "goal": "理解 CSP 的边界：当 CSP 禁用 inline script 时，为什么同源 JSONP 端点可能变成可利用 gadget（script-src 'self'）。并对比一个更“真实”的错误实践：为了做调试追踪/埋点，把请求参数（例如 token）拼进 CSP 响应头（report-uri），在部分浏览器里可用分号注入新的 CSP 指令。对比 VULN/WEAK/SAFE：VULN 反射 HTML；WEAK-1 回调校验不严；WEAK-2 额外演示 CSP 头拼接注入；SAFE 严格限制 callback 且不拼接用户输入到 CSP 头。",
+  "vuln": {
+    "summary": "页面设置 CSP 禁止 inline script，但允许同源脚本加载（script-src 'self'）。关键点：浏览器只关心“脚本来自哪里”，不关心它是不是 JSONP。若同源存在一个会返回可执行 JS 的端点（JSONP）且 callback 可控，那么攻击者就能把“可控代码”包装成同源脚本被加载执行，从而绕过 inline 限制。",
+    "impact": [
+      "在 CSP 存在的情况下仍可能触发脚本执行（取决于 gadget）。",
+      "错误修复（WEAK）常见为字符串替换/黑名单，易被变体绕过。"
+    ],
+    "whatToObserve": [
+      "对照：inline <script>alert(1)</script> 通常被 CSP 拦截（控制台会提示 CSP 违规）。",
+      "验证：<script src=\"?callback=...\"> 加载同源 JSONP 端点，在 callback 可控时会执行。",
+      "区分：WEAK 的“宽松规则/黑名单替换”只是错误修复的模拟；根因是把 callback 当作代码的一部分返回给浏览器执行。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：对 JSONP callback 做严格白名单校验（仅允许标识符/命名空间路径），避免任意表达式注入；同时尽量避免提供 JSONP 这类高风险接口。",
+    "keyControls": [
+      "callback 严格校验：只允许 functionName 或 ns.fn 形式，不允许括号/引号/运算符。",
+      "最小化 gadget：能不用 JSONP 就不用；用 JSON + CORS 替代。",
+      "不要把用户输入拼进 CSP 响应头（尤其是 report-uri/report-to 等）。",
+      "CSP 作为纵深防御：不要把 CSP 当作唯一防线。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/csp/jsonp",
+    "/api/v1/xss/weak/csp/jsonp",
+    "/api/v1/xss/safe/csp/jsonp"
+  ],
+  "notices": [
+    "这关的关键点在浏览器执行链路：即使没有新的后端 JSON API 回显，也可以通过前端训练事件上报（/api/v1/coach/event）让 Coach 知道你刚刚跑了什么输入。",
+    "这是策略/端点组合题：CSP 本身不是漏洞，漏洞在于不安全 gadget（JSONP）。"
+  ],
+  "nextSteps": [
+    "先用 inline script 对照，观察 CSP 违规提示。",
+    "再用 script src 加载同源 JSONP 端点，观察不同 mode 的差异。",
+    "WEAK-2：把 keyword 设置为 `<script>alert(1)</script>`；然后手动在 URL 上追加 `&token=;script-src-elem 'unsafe-inline'`，观察是否因 CSP 头被“拼接注入”而复活 inline script。",
+    "SAFE 下 callback 应被收敛到安全形式或被替换为默认回调；且 token 不应影响 CSP。"
+  ],
+  "whySafe": [
+    "JSONP 的 callback 本质是把用户输入当作 JS 代码的一部分，必须严格限制。",
+    "CSP 只能降低风险，无法替代输入校验/输出编码。"
+  ],
+  "allowedToTell": [
+    "可以解释：为什么同源脚本加载在 CSP 下仍允许，以及 JSONP 为什么危险。",
+    "可以提示：SAFE 的关键是 callback 的结构白名单。"
+  ],
+  "acceptanceCriteria": [
+    "能说明 inline script 与 JSONP gadget 在 CSP 下的差异。",
+    "SAFE：callback 校验阻断任意表达式注入。"
+  ],
+  "doNotTell": [
+    "不要指导真实钓鱼/数据窃取。"
+  ],
+  "references": [
+    "OWASP Content Security Policy Cheat Sheet",
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

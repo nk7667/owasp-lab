@@ -1,0 +1,64 @@
+{
+  "context": "news_time_users_probe",
+  "title": "SQLi · 新闻搜索（盲注：时间通道 → 跨表 users 探测）",
+  "goal": "学员目标：在 VULN 路由中识别 filterExpr 控制的布尔判断，真时触发固定延迟（time-based）；在响应体结构基本不变的前提下，通过慢/快差异完成存在性与逐字符探测。对照 SAFE 路由移除用户可控延迟与结构位拼接。",
+  "vuln": {
+    "summary": "VULN：filterExpr 进入 users 存在性判断（结构位拼接）。当条件为真时服务端触发固定延迟（例如 H2 `CALL SLEEP(1200)`），攻击者通过响应耗时差推断真假，从而进行时间盲注（存在性→逐字符/二分法）。",
+    "impact": [
+      "时间盲注信息泄露：即使响应体不回显敏感数据，仍可通过耗时差逐位推断 users 信息。",
+      "可被滥用为性能攻击：若不设上限与频率控制，可能导致 DoS 风险。",
+      "漏洞成因：开发者往往会“隐藏错误/不回显数据”（以为更安全），但如果仍存在结构位拼接，攻击者就会转而利用可观测的副作用（同步执行导致的耗时差）来做时间盲注。"
+    ],
+    "whatToObserve": [
+      "响应体结构基本不变：主要信号来自耗时（duration）。",
+      "filterExpr 为真：响应显著变慢（约 +1.2s）；为假：接近基线。",
+      "如果出现异常导致的结构性变化（例如 items=[]）或延迟不稳定，优先回退到最简单存在性条件验证语法/函数，再用重复取样降噪。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：移除用户可控 filterExpr 与延迟逻辑；即使保留某些延迟策略（限流/实验），也必须由服务端策略控制且与用户输入无关。",
+    "keyControls": [
+      "禁止用户可控延迟：不接收自由 filterExpr，移除/封装任何由用户输入触发的 sleep/pg_sleep/benchmark 等调用。",
+      "结构位白名单与模板化：结构片段由服务端模板控制；客户端只提供值并参数化。",
+      "QoS：设置延迟上限、熔断与限流，避免被当成 DoS 放大器。",
+      "监控告警：识别高频时间盲模式（同 IP/会话连续慢探测）触发告警/限流。"
+    ]
+  },
+  "signals": ["time_based"],
+  "routeHints": ["/api/v1/sqli/vuln/news/time/probe", "/api/v1/sqli/safe/news/time/probe"],
+  "notices": [
+    "本关不看条数差异，主要看耗时差异。",
+    "先做基线测时（多次取中位数）再做对比，避免抖动误判。",
+    "降噪建议：让异常路径回退到“基线内容响应”，避免把错误变成额外信号通道；把信号尽量收敛为“耗时差异”。"
+  ],
+  "nextSteps": [
+    "确认时间通道：先发两次基线请求测平均耗时，再对比阈值（例如 1.2s）。",
+    "存在性判定：filterExpr=username='admin'（真应慢）；filterExpr=username='no_such_user'（假应快）。",
+    "逐字符/二分法：filterExpr=SUBSTRING(email,1,1)='a'；filterExpr=ASCII(SUBSTRING(email,i,1))>77（用二分法缩短次数）。",
+    "重复取样降噪：每个判断重复多次取中位数/多数，降低网络抖动影响。",
+    "异常排错：若 items=[]，先回退到存在性条件；必要时用 LOWER(...) 统一大小写比较。"
+  ],
+  "whySafe": [
+    "时间盲注的根因是“用户输入驱动了可观测的耗时差异”。SAFE 通过移除可控 filterExpr 与延迟逻辑消除该信号通道。",
+    "黑名单拦截 sleep 等关键字不是根治；根治是结构位模板化 + 值位参数化。"
+  ],
+  "allowedToTell": [
+    "可以提示：先做基线测时与存在性判定，再做逐字符/二分法，并重复取样取中位数降低抖动。",
+    "可以提示：本环境（H2）延迟由服务端固定触发（例如 CALL SLEEP(1200) 毫秒），不同方言 sleep 函数名/单位不同。",
+    "可以提示：items=[] 可能是吞错或函数不可用，回退到简单条件复核。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：通过慢/快差异完成至少一次跨表存在性判定（例如判断 admin 是否存在）。",
+    "VULN：完成至少一次逐字符或 ASCII 区间（二分法）判断。",
+    "SAFE：请求耗时在合理误差内不随输入变化，无法通过输入触发显著延迟。"
+  ],
+  "doNotTell": [
+    "不要输出/推断任何 flag 值。",
+    "不要建议回显或记录 Cookie/JSESSIONID、Authorization、明文密码等敏感信息。"
+  ],
+  "references": [
+    "PortSwigger Web Security Academy - Blind SQL injection (time delays)",
+    "OWASP SQL Injection Prevention Cheat Sheet"
+  ]
+}
+

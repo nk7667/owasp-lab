@@ -1,0 +1,64 @@
+{
+  "context": "xss_stored_comment_html_innerHTML",
+  "title": "XSS · 存储型（评论入库 → 预览/列表渲染：innerHTML）",
+  "goal": "理解存储型 XSS 的关键链路：评论接口会把 `(author, content, website)` 按“原文”入库，但渲染时会按 mode 选择 VULN/WEAK/SAFE 的输出。接口会返回本次的 `preview`（便于对照），而真正的“别人触发”通常发生在后续的列表/管理员审核页。WEAK 的实现是最小黑名单替换（挡 `<script` / 去掉 `javascript:`），SAFE 则对 `author/content` 做 HTML 转义并对 `website` 做协议 allowlist（仅 http/https，否则 `#`）。",
+  "vuln": {
+    "summary": "VULN：评论内容/作者等字段以 HTML 方式渲染（sink=innerHTML），导致持久化脚本在后续访问时执行。",
+    "impact": [
+      "跨用户触发：受害者可能是管理员/审核人员（高权限）。",
+      "持久化：payload 在数据存续期间可反复触发。"
+    ],
+    "whatToObserve": [
+      "提交接口返回 `preview`：包含 `author`、`content`、`websiteHref`（这是按当前 mode 渲染后的结果，不等于数据库里存的原文）。",
+      "列表接口返回 `items[]`：每项同样包含 `author/content/websiteHref`。",
+      "提交后不一定立刻触发，真正触发点在“渲染页面”（列表/审核）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：渲染时对 `author/content` 做 HTML entity encoding（例如 `HtmlUtils.htmlEscape`），对 `website` 做协议 allowlist（仅 http/https，否则 `#`）。如果未来要支持富文本，应引入可靠 sanitizer 并只允许白名单标签/属性。",
+    "keyControls": [
+      "HTML 内容上下文：对 content/author 等做 HTML 转义（& < > \" '）。",
+      "若必须支持富文本：使用可靠 HTML Sanitizer（如 DOMPurify/服务端白名单）。",
+      "WEAK 教学：只挡 <script/javascript: 属于典型错误修复。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/comment/submit",
+    "/api/v1/xss/weak/comment/submit",
+    "/api/v1/xss/safe/comment/submit",
+    "/api/v1/xss/vuln/comment/list",
+    "/api/v1/xss/weak/comment/list",
+    "/api/v1/xss/safe/comment/list"
+  ],
+  "notices": [
+    "存储型 XSS 的教学点是“别人触发”：重点看管理员/审核页渲染。",
+    "WEAK 的真实行为是最小黑名单替换（改写 `<script`、移除 `javascript:`），但不会系统性做 HTML 内容编码或 URL 协议白名单，因此仍可能被变体绕过。",
+    "为了因果清晰，建议一次只练一个落点（content 或 website），避免“内容触发”与“链接触发”混在一起。"
+  ],
+  "nextSteps": [
+    "提交一条普通评论，观察在列表/审核页的显示。",
+    "VULN：提交会影响渲染的输入，刷新审核页观察是否执行/发生 DOM 变化（存储型：别人触发）。",
+    "WEAK：先做对照：script 标签类输入会被变形（<script→<scr_ipt）；再做对照：事件属性/协议变体等仍可能绕过，理解“字符串替换为什么不可靠”。",
+    "SAFE：同样输入应只显示为文本或被 sanitizer 清理，不执行。"
+  ],
+  "whySafe": [
+    "存储型 XSS 的根因是：不可信数据跨边界持久化后在渲染点以 HTML/脚本方式解释。",
+    "正确防护必须在渲染点做上下文编码/安全渲染，而不是依赖输入黑名单。"
+  ],
+  "allowedToTell": [
+    "可以提示：关注渲染页面（审核预览），而不是提交接口本身。",
+    "可以解释：若要支持富文本，应使用 sanitizer 而不是完全禁用标签。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：payload 入库后在后续渲染页产生可观测行为（执行/DOM 变化）。",
+    "SAFE：同样 payload 不执行，仅显示或被清理。"
+  ],
+  "doNotTell": [
+    "不要指导窃取真实敏感信息。"
+  ],
+  "references": [
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

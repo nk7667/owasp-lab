@@ -1,0 +1,63 @@
+{
+  "context": "ssrf_fetch",
+  "title": "SSRF · 直连任意 URL（fetch 模式）",
+  "goal": "理解后端直连任意 URL 带来的 SSRF 风险：VULN 模式允许任意 http(s):// 地址并可访问内网/本机“云元数据”接口；WEAK/SPECIFIC 模式通过协议/主机/IP 白名单逐步收紧，SAFE 模式只允许必要的外部 API 域名。",
+  "vuln": {
+    "summary": "VULN：后端直接将 url 参数传给 HTTP 客户端，不校验协议/主机/端口或内网 IP，攻击者可利用 http://127.0.0.1/... 等地址访问仅内网可见的管理接口或元数据服务。",
+    "impact": [
+      "内网探测：对 127.0.0.1 / 172.16.0.0/12 / 192.168.0.0/16 等网段发起请求，探测本机或内网服务存活情况。",
+      "敏感信息泄露：访问模拟云元数据端点 /api/v1/ssrf/internal/metadata，读取环境信息。",
+      "对外攻击跳板：以服务端身份请求攻击者控制的站点，实现日志投毒或链路联动。"
+    ],
+    "whatToObserve": [
+      "VULN 模式下，对 http://127.0.0.1:8081/api/v1/ssrf/internal/metadata 的请求是否成功返回 meta-data。",
+      "VULN 模式下，请求任意 URL（包括攻击者自控地址）时，响应 body 与状态码如何反馈给客户端。",
+      "不同 weakLevel 下，对协议/主机/IP 限制是否逐步增强（例如仅允许 http/https、拒绝内网 IP 等）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：对 url 做严格校验，仅允许白名单协议（https）和受控主机名列表，拒绝内网 IP / 裸 IP / 非标准端口等高风险目标。",
+    "keyControls": [
+      "解析 URL：使用 URI/URL 工具解析出 scheme/host/port，不在字符串上做简单 contains 检查。",
+      "协议白名单：仅允许 http/https，建议实际生产仅开放 https。",
+      "主机/IP 白名单：限制为配置好的域名；解析出 IP 后拒绝内网/本机地址。",
+      "统一出口：可通过固定的 outbound 代理或 HTTP 客户端配置进一步集中控制。"
+    ]
+  },
+  "signals": [
+    "inband",
+    "ssrf"
+  ],
+  "routeHints": [
+    "/api/v1/ssrf/fetch/VULN",
+    "/api/v1/ssrf/fetch/SAFE",
+    "/api/v1/ssrf/internal/metadata"
+  ],
+  "notices": [
+    "本关聚焦“后端作为 HTTP 客户端直连任意 URL”的 SSRF 场景，不涵盖 DNS rebinding 等高级技巧。",
+    "建议先在 VULN 模式下用正常公网地址确认功能，再逐步尝试 127.0.0.1 / 内网网段 / 云元数据路径。"
+  ],
+  "nextSteps": [
+    "在 VULN 模式下，用 http://example.com/ 验证基础代理功能正常。",
+    "在 VULN 模式下，请求 http://127.0.0.1:8081/api/v1/ssrf/internal/metadata，观察是否返回模拟云元数据。",
+    "切换到 WEAK/SAFE 模式，重复上述请求，确认内网地址被拒绝或被强约束。",
+    "根据 SAFE 的行为，思考如何在实际项目中配置协议/主机/IP 白名单。"
+  ],
+  "whySafe": [
+    "SSRF 的本质是“让服务器帮我发请求”，限制协议/主机/IP 可以显著收缩攻击面。",
+    "仅在确有业务需要时开放有限外部域名，比简单的黑名单或正则过滤更稳健。"
+  ],
+  "allowedToTell": [
+    "可以解释：如何解析 URL 并判断是否为内网/本机地址。",
+    "可以提示：生产环境建议集中出网（统一代理）并在边界层做额外限制。"
+  ],
+  "acceptanceCriteria": [
+    "VULN 模式下可以通过实验 URL 成功访问内网模拟元数据接口。",
+    "SAFE 模式下，同样 payload 会被拒绝或仅允许访问白名单外部域名。"
+  ],
+  "doNotTell": [
+    "不要给出真实云厂商元数据端点或生产环境内网地址。",
+    "不要指导利用 SSRF 直接攻击第三方真实系统。"
+  ]
+}
+

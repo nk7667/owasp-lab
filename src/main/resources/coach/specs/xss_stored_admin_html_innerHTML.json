@@ -1,0 +1,61 @@
+{
+  "context": "xss_stored_admin_html_innerHTML",
+  "title": "XSS · 存储型（管理员审核页：别人触发 → innerHTML）",
+  "goal": "聚焦“别人触发”的真实链路：普通用户提交评论入库，管理员审核页渲染触发。后端会返回 `items[]`（每项含 `author/content/websiteHref`），并标记 `biz=admin`、`view=review`。对比 VULN/WEAK/SAFE：VULN 原样渲染；WEAK 只做最小黑名单替换（挡 `<script` / 去掉 `javascript:`）仍可绕过；SAFE 对内容做 HTML entity encoding、对链接做协议 allowlist（http/https，否则 `#`）。",
+  "vuln": {
+    "summary": "VULN：管理员审核页将评论字段以 HTML 方式渲染（sink=innerHTML 或 href 属性），导致持久化 payload 在管理员访问时触发。",
+    "impact": [
+      "高权限受害者：管理员视角触发可放大影响范围。",
+      "跨页面触发：写入点与触发点分离，更贴近真实系统。"
+    ],
+    "whatToObserve": [
+      "同一条评论在管理员审核页中触发行为，证明是存储型 XSS。",
+      "响应字段：`items[]` 中的 `content`（HTML 内容落点）与 `websiteHref`（href 落点）。",
+      "切换 mode=VULN/WEAK/SAFE，观察同一 payload 的行为变化（mode 在 meta.mode）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：在审核页渲染点对不可信数据做上下文正确编码：`author/content` 做 HTML 转义（entity encoding），`website` 做协议 allowlist（http/https）并输出为 `websiteHref`；前端对 href 建议使用 DOM API 安全写入（`setAttribute/a.href`）进一步降低属性上下文风险。",
+    "keyControls": [
+      "渲染点防护：输出编码靠近渲染处，避免“写入时清洗/黑名单”造成漏网。",
+      "href 落点：协议 allowlist（http/https）+ safe sink 写入，避免属性上下文注入。",
+      "内容落点：HTML entity encoding 或 sanitizer。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/xss/vuln/admin/review",
+    "/api/v1/xss/weak/admin/review",
+    "/api/v1/xss/safe/admin/review"
+  ],
+  "notices": [
+    "这是“别人触发”的关键页面：重点观察审核预览 iframe。",
+    "WEAK 的真实行为是最小黑名单替换（改写 `<script`、移除 `javascript:`），它不会系统性覆盖事件属性/协议变体/引号编码等问题，因此“仍可绕过”是刻意设计的教学点。",
+    "如果同时练 content 与 website 两个落点，容易因果混淆；建议单落点切换 focus。"
+  ],
+  "nextSteps": [
+    "先提交普通评论，进入审核页确认链路正常。",
+    "VULN：提交 payload 后刷新审核页，观察是否触发。",
+    "WEAK：先做对照：script 标签类输入会被变形（<script→<scr_ipt）或 `javascript:` 字面量被移除；再做对照：事件属性/协议变体/引号结构问题仍可能存在，从现象推回“修复缺口”。",
+    "SAFE：同样 payload 不应执行；href 类输入应被降级为 # 或保持安全 http/https。"
+  ],
+  "whySafe": [
+    "审核页是典型高风险渲染点：来自数据库的数据也必须视为不可信。",
+    "正确修复是“上下文正确编码 + safe sink + URL 校验”，而不是字符串替换。"
+  ],
+  "allowedToTell": [
+    "可以提示：存储型 XSS 的触发点在审核页，不在提交接口。",
+    "可以提示：href 与 innerHTML 属于不同上下文，需要不同修复策略。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：payload 在审核页产生可观测行为。",
+    "SAFE：同样 payload 不执行，链接落点不会发生属性逃逸/危险协议。"
+  ],
+  "doNotTell": [
+    "不要指导窃取真实敏感信息。"
+  ],
+  "references": [
+    "OWASP Cross Site Scripting Prevention Cheat Sheet"
+  ]
+}
+

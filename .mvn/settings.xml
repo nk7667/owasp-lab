@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <!--
+    Cursor 沙箱下默认 ~/.m2/repository 可能不可写。
+    将 localRepository 指向项目内目录，方便在受限环境中编译验证。
+  -->
+  <localRepository>${user.dir}/.m2repo</localRepository>
+</settings>
+

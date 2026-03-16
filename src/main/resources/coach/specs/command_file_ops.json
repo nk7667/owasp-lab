@@ -1,0 +1,64 @@
+{
+  "context": "command_file_ops",
+  "title": "命令注入 · 文件操作（ls/grep/cat 与路径拼接）",
+  "goal": "在已经理解基础命令注入（ping）的前提下，进一步观察文件类命令（ls/grep/cat）在 VULN 模式下如何通过路径拼接执行任意命令或读取敏感文件，并对比 SAFE 模式下的白名单/固定工作目录策略。",
+  "vuln": {
+    "summary": "VULN：将 path/keyword/filename 直接拼接到 shell 命令行，例如 \"ls \" + path、\"grep '\" + keyword + \"'\" 等，通过 /bin/sh -c 执行。攻击者可以注入分隔符（; && |）或构造绝对路径/.. 逃逸限制目录。",
+    "impact": [
+      "任意文件读取：通过 cat /etc/passwd、cat /opt/lab/secret 等命令读取敏感文件内容。",
+      "目录遍历：结合 .. 片段访问原本不应暴露的目录。",
+      "命令链扩展：在文件操作命令后面继续拼接其他系统命令，实现持久化或横向扩展。"
+    ],
+    "whatToObserve": [
+      "VULN 模式下，传入路径中包含 ; / && / | 等分隔符时，命令是否被拆成多段执行。",
+      "VULN 模式下，传入绝对路径或包含 .. 的路径时，是否能访问到工作目录之外的文件。",
+      "错误回显中是否包含完整命令行或文件系统路径，有助于枚举目录结构。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE：对文件操作引入“固定工作根目录 + ProcessBuilder 参数数组”的组合：只允许在预设根目录下列目录/搜索/读取，并用 Path 规范化校验，所有命令参数通过数组传递给底层进程，而不是由 shell 解析。",
+    "keyControls": [
+      "固定根目录：将所有文件操作限制在如 /opt/lab 或配置目录下，拒绝任何逃逸（规范化后的路径必须以根目录为前缀）。",
+      "避免 shell：使用 ProcessBuilder(\"ls\", normalizedPath) 等参数数组，避免由 /bin/sh -c 解析字符串命令。",
+      "扩展名/模式白名单：对于 grep/cat 这类接口，可限制只允许特定扩展名或特定子目录下的文件。"
+    ]
+  },
+  "signals": [
+    "inband"
+  ],
+  "routeHints": [
+    "/api/v1/command-execution/file/ls/VULN",
+    "/api/v1/command-execution/file/ls/SAFE",
+    "/api/v1/command-execution/file/grep/VULN",
+    "/api/v1/command-execution/file/grep/SAFE",
+    "/api/v1/command-execution/file/cat/VULN",
+    "/api/v1/command-execution/file/cat/SAFE"
+  ],
+  "notices": [
+    "本关假设基础 RCE/ping 已经完成，本关主要关注“与文件系统相关的命令注入与路径控制”。",
+    "生产实践中通常会组合使用：固定根目录 + 参数数组 + 审计日志 + 最小权限账户。"
+  ],
+  "nextSteps": [
+    "在 VULN 模式下，用正常路径（如 /opt/lab 或工作目录）确认 ls/grep/cat 功能正常。",
+    "在 VULN 模式下，构造包含 ; 或 && 的路径/关键字尝试执行额外命令（例如 ; id / ; cat /etc/passwd）。",
+    "在 VULN 模式下，尝试使用绝对路径或 .. 片段访问工作目录之外的文件，观察是否成功。",
+    "在 SAFE 模式下，重复上述 payload，验证路径被规范化并限制在根目录内，且命令通过参数数组执行，不再解释分隔符。"
+  ],
+  "whySafe": [
+    "大部分命令注入来自“字符串命令 + shell 解析”，使用参数数组可以显著降低注入面。",
+    "固定工作根目录与路径规范化结合，可以防止目录遍历与任意文件访问。"
+  ],
+  "allowedToTell": [
+    "可以解释：shell 解析与 ProcessBuilder 参数数组的区别（哪种更易触发命令注入）。",
+    "可以提示：如何设计安全的文件操作 API（限制根目录 + 扩展名白名单）。"
+  ],
+  "acceptanceCriteria": [
+    "学员能在 VULN 模式下通过文件操作接口触发文件读取或命令注入，再在 SAFE 模式下验证相同 payload 被正确限制。",
+    "学员能说清楚固定根目录 + 参数数组的组合防御思路。"
+  ],
+  "doNotTell": [
+    "不要建议访问真实生产环境中的敏感系统文件，仅限靶场提供的示例路径。",
+    "不要指导通过命令注入建立持久后门，仅聚焦教学和检测。"
+  ]
+}
+

@@ -1,0 +1,66 @@
+{
+  "context": "news_boolean_users_probe",
+  "title": "SQLi · 新闻搜索（盲注：布尔 one-bit → 跨表 users 探测）",
+  "goal": "学员目标：在 VULN 路由中识别 filterExpr 进入 `EXISTS(users WHERE …)` 的结构位拼接点；通过“隐藏新闻是否出现/条数变化”等 true/false 差异完成跨表条件探测（存在性→模式匹配→逐字符）。对照 SAFE 路由如何用 filterKey 白名单映射 + filterValue 参数化收回结构控制权。",
+  "vuln": {
+    "summary": "VULN：q 仍采用参数化 LIKE（值位安全），但把 filterExpr 直接拼接进 `EXISTS (SELECT 1 FROM users WHERE <filterExpr>)`（结构位可控），导致布尔盲注：当应用不回显 users 数据时，攻击者可通过“真/假响应差异”逐步推断 users 表信息。",
+    "impact": [
+      "盲注信息泄露：通过 one-bit 信号（隐藏新闻出现/条数差异）推断 users 的存在性、模式匹配结果与逐字符判断结果。",
+      "绕过边界：filterExpr 为真时可放行本应不可见的隐藏新闻（is_public=false）。",
+      "漏洞成因（开发者视角）：为了实现“搜索 + 权限边界/特性开关”，开发者把用户输入当作 WHERE 谓词片段拼到 SQL 结构里（把“代码”交给了客户端），即使 q 仍做了参数化绑定，仍会产生盲注链路。",
+      "易踩坑：如果把 SQL 语法错误/异常统一吞成 items=[]，会把“错误”变成额外 oracle（学员/DAST 难以区分：条件为假 vs 语法报错）。更稳的做法是异常时回退到与“假条件”一致的基线结果。"
+    ],
+    "whatToObserve": [
+      "q 只影响 title LIKE 匹配（值位），不能用闭合引号/UNION 改写结构。",
+      "filterExpr 为真：隐藏新闻（标题含【隐藏】）出现或 count 增加；为假：只显示公开新闻。",
+      "如果你看到异常导致的结构性变化（例如 items=[]/count=0 但日志提示 SQL error），这通常意味着 oracle 被污染；应先用恒真/恒假和最简单存在性条件复核。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE（生产语义）：不接受自由格式的 filterExpr；草稿可见性由服务端会话角色决定（admin 才能看草稿）。客户端参数仅用于正常筛选/排序（例如 q/sortField/sortOrder），并通过参数化与白名单映射阻断结构位注入。",
+    "keyControls": [
+      "鉴权：是否包含草稿由 session 角色决定，不由客户端输入决定。",
+      "ORDER BY 白名单：sortField/sortOrder 通过映射产生安全的列名与方向，不拼接用户输入。",
+      "参数化：q 使用绑定参数（PreparedStatement/Query.setParameter）。",
+      "统一错误：吞错返回固定结构（items/count），避免额外信号通道。"
+    ]
+  },
+  "signals": ["blind_boolean"],
+  "routeHints": ["/api/v1/sqli/vuln/news/boolean/probe", "/api/v1/sqli/safe/news/boolean/probe"],
+  "notices": [
+    "本关核心是 one-bit 信号：不要追求回显 users 数据，而是通过“隐藏新闻是否出现/条数差异”判断真假。",
+    "先用恒真/恒假验证信号通道是否工作，再做存在性与逐字符探测。",
+    "降噪建议：尽量让“假条件的正常响应”和“异常响应”长得一样（回退到基线），否则会引入额外 oracle 影响学习与自动化检测。"
+  ],
+  "nextSteps": [
+    "最小真/假测试：filterExpr=1=0（假）与 filterExpr=1=1（真）验证差异信号是否存在。",
+    "更稳存在性：filterExpr=username='admin'（若 admin 存在，应出现隐藏新闻）。",
+    "域名/模式匹配：filterExpr=email LIKE '%@owasp-lab.local'；再试 filterExpr=email LIKE 'a%@owasp-lab.local' 缩小范围。",
+    "逐字符布尔探测：filterExpr=SUBSTRING(email,1,1)='a'；filterExpr=ASCII(SUBSTRING(email,2,1))>109（用二分法缩短次数）。",
+    "稳健排错：若方言大小写敏感，使用 LOWER(email) 统一比较；若 items=[]，先回退到存在性条件再继续。"
+  ],
+  "whySafe": [
+    "SAFE 不暴露任意 filterExpr 表达式能力：结构位由服务端模板固定。",
+    "即使 q/filterValue 参数化正确，若仍拼接结构位谓词也会产生盲注；SAFE 的关键是“模板化 + 白名单”。"
+  ],
+  "allowedToTell": [
+    "可以提示：先做恒真/恒假，再做存在性，再做模式匹配，再做逐字符（SUBSTRING/ASCII）并使用二分法。",
+    "可以提示：隐藏新闻标题含【隐藏】，这是 one-bit 信号来源。",
+    "可以提示：items=[] 可能是吞错或条件为假，回退到简单条件复核。",
+    "可以给 profile 提示：H2 常用 SUBSTRING/ASCII/LOWER，LIKE 支持 % 通配符。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：通过 filterExpr 控制真假差异（隐藏新闻出现/不出现），完成至少一次跨表存在性判定（例如判断 admin 是否存在）。",
+    "VULN：完成至少一次模式匹配或逐字符判断（例如 email 域名或首字母）。",
+    "SAFE：只能通过 filterKey/filterValue 影响查询，无法提交任意 filterExpr 改写 SQL 结构。"
+  ],
+  "doNotTell": [
+    "不要输出/推断任何 flag 值。",
+    "不要建议回显或记录 Cookie/JSESSIONID、Authorization、明文密码等敏感信息。"
+  ],
+  "references": [
+    "PortSwigger Web Security Academy - Blind SQL injection (conditional responses)",
+    "OWASP SQL Injection Prevention Cheat Sheet"
+  ]
+}
+

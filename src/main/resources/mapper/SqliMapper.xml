@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.owasplab.mapper.SqliMapper">
+
+    <!-- VULN：拼接 username/password，存在注入 -->
+    <select id="selectUserByLoginVuln" resultType="org.owasplab.entity.User">
+        SELECT * FROM users
+        WHERE username = '${username}' AND password = '${password}'
+    </select>
+
+    <!-- SAFE：按用户名查，密码在 Java 用 PasswordEncoder 校验 -->
+    <select id="selectUserByUsername" resultType="org.owasplab.entity.User">
+        SELECT * FROM users WHERE username = #{username}
+    </select>
+
+    <!-- VULN：id 直接拼接 -->
+    <select id="selectUserByIdVuln" resultType="org.owasplab.entity.User">
+        SELECT * FROM users WHERE id = ${requestedId} AND id = ${scopeUserId}
+    </select>
+
+    <!-- SAFE：参数化 -->
+    <select id="selectUserByIdSafe" resultType="org.owasplab.entity.User">
+        SELECT * FROM users WHERE id = #{requestedId} AND id = #{scopeUserId}
+    </select>
+
+    <!-- VULN：ORDER BY 拼接 -->
+    <select id="listUsersVuln" resultType="java.util.LinkedHashMap">
+        SELECT id, username, email, role FROM users
+        WHERE role = 'user' ORDER BY ${sortField} ${sortOrder} LIMIT 3
+    </select>
+
+    <!-- SAFE：column/direction 为 Java 白名单后的安全值 -->
+    <select id="listUsersSafe" resultType="java.util.LinkedHashMap">
+        SELECT id, username, email, role FROM users
+        WHERE role = 'user' ORDER BY ${column} ${direction} LIMIT 3
+    </select>
+
+    <!-- VULN：LIKE 拼接 -->
+    <select id="newsUnionSearchVuln" resultType="java.util.LinkedHashMap">
+        SELECT title, SUBSTRING(content, 1, 80) AS snippet, created_at
+        FROM news
+        WHERE is_public = true AND title LIKE '%${q}%'
+        ORDER BY created_at DESC LIMIT 5
+    </select>
+
+    <!-- SAFE：LIKE 参数化，调用方传 searchQ = "%" + q + "%" -->
+    <select id="newsUnionSearchSafe" resultType="java.util.LinkedHashMap">
+        SELECT title, SUBSTRING(content, 1, 80) AS snippet, created_at
+        FROM news
+        WHERE is_public = true AND title LIKE #{searchQ}
+        ORDER BY created_at DESC LIMIT 5
+    </select>
+
+    <!-- VULN：acctTsExpr 拼接进结构位（难度2） -->
+    <select id="newsAdvSearchVuln" resultType="java.util.LinkedHashMap">
+        SELECT * FROM (
+            SELECT ${safeTitleExpr} AS title, SUBSTRING(content, 1, 80) AS snippet, created_at
+            FROM news
+            WHERE is_public = true AND title LIKE #{searchQ}
+            UNION ALL
+            SELECT alias_username AS title, alias_email AS snippet, CAST(${acctTsExpr} AS TIMESTAMP) AS created_at
+            FROM vw_accounts
+        ) AS merged
+        ORDER BY created_at DESC LIMIT 5
+    </select>
+
+    <!-- SAFE：safeTitleExpr 白名单，searchQ 参数化 -->
+    <select id="newsAdvSearchSafe" resultType="java.util.LinkedHashMap">
+        SELECT * FROM (
+            SELECT ${safeTitleExpr} AS title, SUBSTRING(content, 1, 80) AS snippet, created_at
+            FROM news
+            WHERE is_public = true AND title LIKE #{searchQ}
+            UNION ALL
+            SELECT alias_username AS title, alias_email AS snippet, CAST(TIMESTAMP '2000-01-01 00:00:00' AS TIMESTAMP) AS created_at
+            FROM vw_accounts
+        ) AS merged
+        ORDER BY created_at DESC LIMIT 5
+    </select>
+
+    <!-- VULN：probe 拼接进 EXISTS -->
+    <select id="newsBooleanProbeVuln" resultType="java.util.LinkedHashMap">
+        SELECT title, snippet, created_at FROM (
+            (SELECT title, SUBSTRING(content, 1, 80) AS snippet, created_at
+             FROM news
+             WHERE is_public = true AND title LIKE #{searchQ}
+             ORDER BY created_at DESC LIMIT 4)
+            UNION ALL
+            (SELECT title, SUBSTRING(content, 1, 80) AS snippet, created_at
+             FROM news
+             WHERE is_public = false AND EXISTS (SELECT 1 FROM users WHERE ${probe})
+             ORDER BY created_at ASC LIMIT 1)
+        ) merged
+        ORDER BY created_at DESC LIMIT 5
+    </select>
+
+    <!-- SAFE：visibility/column/direction 白名单 -->
+    <select id="newsBooleanProbeSafe" resultType="java.util.LinkedHashMap">
+        SELECT title, SUBSTRING(content, 1, 80) AS snippet, created_at
+        FROM news
+        WHERE ${visibility} AND title LIKE #{searchQ}
+        ORDER BY ${column} ${direction} LIMIT 5
+    </select>
+
+    <!-- VULN：时间盲注用，probe 拼接，返回 1 或 0 -->
+    <select id="probeExistsVuln" resultType="java.lang.Integer">
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM users WHERE ${probe}) THEN 1 ELSE 0 END
+    </select>
+
+    <!-- 公开新闻列表，参数化 -->
+    <select id="queryPublicNewsByTitleLike" resultType="java.util.LinkedHashMap">
+        SELECT title, SUBSTRING(content, 1, 80) AS snippet, created_at
+        FROM news
+        WHERE is_public = true AND title LIKE #{searchQ}
+        ORDER BY created_at DESC LIMIT 5
+    </select>
+</mapper>

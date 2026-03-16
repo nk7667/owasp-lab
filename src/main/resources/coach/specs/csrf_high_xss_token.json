@@ -1,0 +1,76 @@
+{
+  "context": "csrf_high_xss_token",
+  "title": "CSRF · High（XSS + Token 绕过）",
+  "goal": "识别 CSRF High 关卡的攻击链：XSS 注入 → 提取 CSRF token → 同源改密请求。关键点是有 CSRF token 防护，但 XSS 可以绕过。",
+  "vuln": {
+    "summary": "VULN：虽然有 CSRF token，但存在 XSS 漏洞。攻击者通过 XSS 注入脚本，在同源下读取 DOM 提取 token，再发起改密请求。",
+    "impact": [
+      "Token 绕过：XSS 提供同源执行能力，可以读取 CSRF token。",
+      "状态改变：受害者密码被修改，攻击者接管账号。",
+      "链式攻击：XSS 是更强的漏洞，可以绕过 CSRF 防护。"
+    ],
+    "whatToObserve": [
+      "XSS 注入点：/api/v1/xss/vuln/search/results?target=html",
+      "Token 提取：从 /api/v1/csrf/high/password/page 的 HTML 中读取 <input name='user_token'>",
+      "改密请求：POST /api/v1/csrf/high/password/change（携带 token）",
+      "iframe sandbox：需要 allow-same-origin 才能访问父页面 cookie。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE（防御措施）：CSRF token + SameSite Cookie + 根治 XSS。Token 防护只能缓解，不能替代 XSS 防护。",
+    "keyControls": [
+      "CSRF token：服务端生成随机 token，绑定 session，请求时校验。",
+      "SameSite Cookie：设置 SameSite=Lax/Strict，降低跨站携带风险。",
+      "根治 XSS：按上下文正确编码（HTML/Attr/URL/JS），防止脚本注入。",
+      "CSP：降低 XSS 危害面，但不是根治。"
+    ]
+  },
+  "signals": ["inband"],
+  "routeHints": [
+    "/api/v1/csrf/high/password/change",
+    "/api/v1/csrf/high/password/page",
+    "/api/v1/xss/vuln/search/results"
+  ],
+  "notices": [
+    "High 关卡演示 XSS + CSRF 联动攻击。",
+    "CSRF token 是第二道防线，有 XSS 会被绕过。",
+    "XSS 注入点在 /api/v1/xss/vuln/search/results（target=html）。",
+    "iframe sandbox 需要包含 allow-same-origin 才能访问父页面 cookie。",
+    "攻击链：XSS → 提取 token → 改密请求。"
+  ],
+  "nextSteps": [
+    "登录受害者账号（admin/admin123）。",
+    "访问 XSS 注入点：/api/v1/xss/vuln/search/results?target=html",
+    "输入 XSS payload：fetch('/api/v1/csrf/high/password/page') → 提取 token → 发起改密请求",
+    "确认 target=html（HTML 上下文，脚本才能执行）。",
+    "检查 iframe sandbox（应包含 allow-same-origin）。",
+    "观察 Network 面板，确认改密请求已发送。",
+    "验证攻击成功：用新密码登录（csrf-high-123）。"
+  ],
+  "whySafe": [
+    "CSRF token 不能替代 XSS 防护。",
+    "只要有 XSS，token 防护就会被绕过。",
+    "根治方法是防止 XSS（按上下文正确编码）。",
+    "SameSite Cookie 只能降低跨站风险，不能完全防止。"
+  ],
+  "allowedToTell": [
+    "可以解释：XSS + CSRF 的攻击链。",
+    "可以提示：iframe sandbox 的重要性（allow-same-origin）。",
+    "可以提示：target=html 的重要性（HTML 上下文）。",
+    "可以给防御建议：根治 XSS + CSRF token + SameSite。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：能通过 XSS 成功提取 token 并修改密码。",
+    "VULN：理解 XSS + CSRF 的联动关系。",
+    "VULN：理解 CSRF token 的局限性。"
+  ],
+  "doNotTell": [
+    "不要建议窃取真实系统的敏感信息。",
+    "不要提供真实系统的攻击 URL。"
+  ],
+  "references": [
+    "OWASP Cross-Site Request Forgery Prevention Cheat Sheet",
+    "OWASP Cross Site Scripting Prevention Cheat Sheet",
+    "PortSwigger Web Security Academy - CSRF"
+  ]
+}

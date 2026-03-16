@@ -1,0 +1,64 @@
+{
+  "context": "news_union_users",
+  "title": "SQLi · 新闻搜索（UNION 跨表回显）",
+  "goal": "以渗透验证为主：在 VULN 新闻搜索中复现 LIKE 注入并通过 UNION 跨表把 users 数据映射到 title/snippet 回显；理解“SELECT 3 列、回显 2 列 + 吞错”的教学设计与 1-bit 信号通道；再对照 SAFE 的参数化 LIKE 如何切断结构注入。",
+  "vuln": {
+    "summary": "VULN 侧将用户输入 q 直接拼进 `title LIKE '%<q>%'`，导致输入可闭合引号并拼接 UNION/ORDER BY/注释等结构片段，最终把 users 表数据跨表回显到新闻列表。",
+    "impact": [
+      "数据泄露：可把 users.username/email/secret 等字段映射到回显列（title/snippet）。",
+      "结构探测：可用 ORDER BY 列序号探测 UNION 列数与可控性。",
+      "信号放大：本关卡吞错返回 items=[]，会把“SQL 是否报错”压缩成 1-bit 信号（空/非空），适合教学但也可能误导排查。"
+    ],
+    "whatToObserve": [
+      "观察请求参数 q 是否能影响 SQL 结构（闭合引号、UNION、注释截断）。",
+      "观察响应 data.items：出现 users.username/email 映射到 title/snippet 即为 inband 成功信号。",
+      "注意 1-bit 信号：items=[] 既可能是“没命中数据”，也可能是“SQL 报错被吞掉”。不要仅凭空数组判断“注入失败”。",
+      "H2 兼容性：UNION 的第三列必须与 news.created_at 类型兼容，否则会抛异常并被吞掉（表现为 items=[]）。"
+    ]
+  },
+  "safe": {
+    "summary": "SAFE 侧使用参数化 LIKE（title LIKE ? 并绑定 %q%），使 q 永远只作为“数据”参与匹配，无法改写 SQL 结构，因此 UNION/注释/ORDER BY 注入都失效。",
+    "keyControls": [
+      "参数化 LIKE：title LIKE ?1，参数值为 '%' + q + '%'。",
+      "固定结构：SELECT 列数与 ORDER BY/LIMIT 固定在后端，用户输入不参与结构拼装。",
+      "统一错误：对外不回显 SQL 异常细节（靶场用于信号对照时可吞错），服务端用日志留证据用于排查。"
+    ]
+  },
+  "signals": ["inband", "one_bit_signal"],
+  "routeHints": ["/api/v1/sqli/vuln/news/union/search", "/api/v1/sqli/safe/news/union/search"],
+  "notices": [
+    "教学设计：SELECT 固定 3 列，但只回显前 2 列（title/snippet）。第三列用于对齐 created_at 或做结构探测垫列。",
+    "H2 常见坑：CURRENT_TIMESTAMP 可能是带时区的 timestamp，和 created_at（LocalDateTime/TIMESTAMP）不兼容；导致 UNION 报错被吞，表现为 items=[]。",
+    "排查原则：当 items=[] 时，先判断是否触发吞错（查看服务端日志），再调整第三列类型（NULL 或显式 CAST）。"
+  ],
+  "nextSteps": [
+    "基线验证：q 为空时应只返回公开新闻（LIMIT 5）。",
+    "先探测列数（更贴近真实打法）：不做 UNION，直接注入 `ORDER BY N`。本关卡原始 SELECT 固定为 3 列：ORDER BY 1-3 通常正常；ORDER BY 4 往往触发异常→被吞→items=[]（1-bit 信号）。",
+    "再做 UNION 跨表回显：在确认“需要 3 列”后，再构造 payload 闭合 LIKE 的引号并拼接 `UNION SELECT <col1>,<col2>,<col3> FROM users`，把 users.username/email 映射到 title/snippet；第三列用 NULL 或显式 CAST 以适配 H2 类型对齐。",
+    "对照 SAFE：用相同 payload 请求 SAFE 接口，确认注入失效且仅作为普通关键词参与 LIKE 匹配。"
+  ],
+  "whySafe": [
+    "参数化查询让 q 无法成为 SQL 语法的一部分，因此不能闭合引号、更不能拼接 UNION/注释/ORDER BY。",
+    "结构片段（列数/排序/分页）由后端固定控制，用户输入只影响数据匹配，不影响结构。"
+  ],
+  "allowedToTell": [
+    "解释 1-bit 信号：items=[] 可能代表“没命中”或“报错被吞”。建议结合服务端日志与 payload 调整做排查。",
+    "给出类型对齐建议：第三列优先使用 NULL；或在 H2 下对 CURRENT_TIMESTAMP 做显式 CAST 以匹配 created_at 类型。",
+    "给出结构探测方法：用 ORDER BY 列序号（3/4）推断 UNION 列数与可控性，并解释为什么会出现 items=[]。",
+    "强调对照学习：同 payload 在 SAFE 下应该只当关键词，不应触发结构变化。"
+  ],
+  "acceptanceCriteria": [
+    "VULN：能够通过 UNION 跨表让 users.username/email 出现在响应 items 的 title/snippet 中。",
+    "VULN：当第三列类型不兼容或列数不对时，响应保持 200 且 items=[]（吞错），并可在服务端日志中定位原因。",
+    "SAFE：同样 payload 不应回显 users 数据，且不会因结构注入改变查询逻辑。"
+  ],
+  "doNotTell": [
+    "不要输出/推断任何 flag 值。",
+    "不要建议回显或记录 Cookie/JSESSIONID、Authorization、明文密码等敏感信息。"
+  ],
+  "references": [
+    "H2 Database - UNION / type conversion behavior (general)",
+    "OWASP SQL Injection Prevention Cheat Sheet (general)"
+  ]
+}
+
