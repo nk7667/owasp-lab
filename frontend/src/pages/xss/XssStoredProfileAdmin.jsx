@@ -168,8 +168,7 @@ export default function XssStoredProfileAdmin() {
                   style={ALERT_DARK_BASE_STYLE}
                   message={
                     <span style={{ color: '#e6edf3' }}>
-                      这是目标系统的后台预览端（用于模拟管理员打开记录并触发执行）。攻击者视角的 OOB 事件请到
-                      “盲打 · Profile（提交）”或“攻击者控制台（OOB）”查看。
+                      这是目标系统的后台预览端（用于模拟管理员打开记录并触发执行）。
                     </span>
                   }
                 />

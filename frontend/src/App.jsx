@@ -23,7 +23,8 @@ import Coach from './pages/Coach';
 import XssIntro from './pages/xss/XssIntro';
 import XssReflected from './pages/xss/XssReflected';
 import XssStored from './pages/xss/XssStored';
-import XssDom from './pages/xss/XssDom';
+import XssDomHandwritten from './pages/xss/XssDom';
+import XssDomJsonp from './pages/xss/XssDomJsonp';
 import XssStoredProfileSubmit from './pages/xss/XssStoredProfileSubmit';
 import XssStoredProfileAdmin from './pages/xss/XssStoredProfileAdmin';
 import AttackerOob from './pages/attacker/AttackerOob';
@@ -95,7 +96,8 @@ function AppContent() {
           { key: '/xss/stored', label: '存储型' },
           { key: '/xss/stored-profile-submit', label: '盲打 · Profile（提交）' },
           { key: '/xss/stored-profile-admin', label: '盲打 · Profile（后台）' },
-          { key: '/xss/dom', label: 'DOM 型' },
+          { key: '/xss/dom', label: 'DOM 型（含富文本存储）' },
+          { key: '/xss/dom/jsonp', label: 'DOM JSONP（CSP+同源）' },
         ],
       },
       {
@@ -205,7 +207,8 @@ function AppContent() {
                 <Route path="/xss/stored" element={<XssStored />} />
                 <Route path="/xss/stored-profile-submit" element={<XssStoredProfileSubmit />} />
                 <Route path="/xss/stored-profile-admin" element={<XssStoredProfileAdmin />} />
-                <Route path="/xss/dom" element={<XssDom />} />
+                <Route path="/xss/dom" element={<XssDomHandwritten />} />
+                <Route path="/xss/dom/jsonp" element={<XssDomJsonp />} />
 
                 <Route path="/csrf/low" element={<CsrfLow />} />
                 <Route path="/csrf/high" element={<CsrfHigh />} />

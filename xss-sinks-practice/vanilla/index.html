@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>原生 innerHTML / outerHTML 练习</title>
+  <!-- 开源白名单净化，演示「富文本汇点」加固 -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 1.5rem auto; padding: 0 1rem; }
+    section { border: 1px solid #ccc; padding: 12px; margin: 12px 0; border-radius: 8px; }
+    h2 { font-size: 1rem; margin-top: 0; }
+    .bad { border-color: #c00; }
+    .ok { border-color: #15803d; }
+    code { background: #f4f4f4; padding: 2px 6px; }
+    #target { min-height: 1.5em; background: #fafafa; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>危险 API：innerHTML / outerHTML（原生）</h1>
+  <p>仅本机学习。先在下面<strong>手输入</strong>要测试的字符串，再点对应操作（模拟「用户可控数据」进 DOM）。</p>
+
+  <section style="border-color:#333;">
+    <h2>输入区</h2>
+    <label for="xss-input">要写入的字符串（可试 <code>&lt;img src=x onerror=alert(1)&gt;</code> 或普通文字）</label>
+    <textarea id="xss-input" rows="4" style="width:100%;box-sizing:border-box;font-family:monospace;" spellcheck="false" placeholder="在此手敲 payload 或 HTML…"></textarea>
+  </section>
+
+  <section class="bad">
+    <h2>1. 漏洞：<code>innerHTML = 未处理字符串</code></h2>
+    <p>读取输入框内容赋给 innerHTML；浏览器会解析 HTML。</p>
+    <button type="button" id="btn-vuln-inner">把输入框内容写入 innerHTML（危险）</button>
+  </section>
+
+  <section class="ok">
+    <h2>2. 安全：只显示纯文本 <code>textContent</code></h2>
+    <button type="button" id="btn-safe-text">把输入框内容用 textContent 显示</button>
+  </section>
+
+  <section class="ok">
+    <h2>3. 必须带 HTML 时：<code>DOMPurify.sanitize</code>（白名单净化）</h2>
+    <button type="button" id="btn-safe-purify">innerHTML + sanitize(输入框)</button>
+  </section>
+
+  <section class="bad">
+    <h2>4. <code>outerHTML</code>（替换整节点，同样是 HTML 汇点）</h2>
+    <p>整段替换为新的 HTML；内容来自输入框。</p>
+    <button type="button" id="btn-vuln-outer">outerHTML 写入输入框内容（危险）</button>
+    <button type="button" id="btn-safe-outer">outerHTML + DOMPurify(输入框)</button>
+  </section>
+
+  <p>目标节点：</p>
+  <div id="target">（内容会写在这里）</div>
+
+  <script>
+    function getInput() {
+      return document.getElementById('xss-input').value;
+    }
+
+    document.getElementById('btn-vuln-inner').onclick = function () {
+      var el = document.getElementById('target');
+      el.innerHTML = getInput();
+    };
+
+    document.getElementById('btn-safe-text').onclick = function () {
+      var el = document.getElementById('target');
+      el.textContent = getInput();
+    };
+
+    document.getElementById('btn-safe-purify').onclick = function () {
+      var el = document.getElementById('target');
+      el.innerHTML = DOMPurify.sanitize(getInput());
+    };
+
+    document.getElementById('btn-vuln-outer').onclick = function () {
+      var el = document.getElementById('target');
+      el.outerHTML = '<div id="target">' + getInput() + '</div>';
+    };
+
+    document.getElementById('btn-safe-outer').onclick = function () {
+      var el = document.getElementById('target');
+      el.outerHTML = '<div id="target">' + DOMPurify.sanitize(getInput()) + '</div>';
+    };
+  </script>
+</body>
+</html>

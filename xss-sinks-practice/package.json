@@ -1,0 +1,9 @@
+{
+  "name": "xss-sinks-practice",
+  "private": true,
+  "description": "Static vanilla XSS sink drills; optional local server / live reload",
+  "scripts": {
+    "open": "npx --yes serve vanilla -l 5173",
+    "dev": "npx --yes live-server vanilla --port=5500 --open=/index.html"
+  }
+}

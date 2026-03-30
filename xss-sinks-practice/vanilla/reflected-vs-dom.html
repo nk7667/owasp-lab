@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>阶段2：反射 vs DOM（对照）</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 1rem auto; padding: 0 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 700px) { body { grid-template-columns: 1fr; } }
+    section { border: 1px solid #ccc; padding: 12px; border-radius: 8px; }
+    .left { border-color: #15803d; }
+    .right { border-color: #b45309; }
+    h1 { grid-column: 1 / -1; font-size: 1.1rem; }
+    code { background: #f4f4f4; padding: 2px 6px; }
+    #out { min-height: 2em; background: #fafafa; padding: 8px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>阶段2：同一 payload，两种「故事线」</h1>
+
+  <section class="left">
+    <h2>反射型（服务端拼 HTML）</h2>
+    <p>恶意片段在 <strong>HTTP 响应体</strong> 里就已经出现；浏览器解析 HTML 时中招。</p>
+    <p>练习：<strong>xss-mini-reflected</strong> 的 <code>/vuln?q=</code>（需先 <code>npm run dev</code>）。</p>
+  </section>
+
+  <section class="right">
+    <h2>DOM 型（本页）</h2>
+    <p>本页 HTML <strong>响应里可以不包含</strong> 你的 payload；下面脚本从 <code>location.search</code> 读出 <code>q</code> 再写入 <code>innerHTML</code>，仍在浏览器里执行 HTML 解析。</p>
+    <p>试用 URL（本机）：在本文件名后加 <code>?q=&lt;img src=x onerror=alert(1)&gt;</code></p>
+    <button type="button" id="btn">把 URL 里的 q 写入 innerHTML（危险演示）</button>
+    <div id="out"></div>
+  </section>
+
+  <script>
+    function getQ() {
+      var params = new URLSearchParams(window.location.search);
+      return params.get('q') || '';
+    }
+    document.getElementById('btn').onclick = function () {
+      document.getElementById('out').innerHTML = getQ();
+    };
+  </script>
+</body>
+</html>
