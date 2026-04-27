@@ -36,6 +36,7 @@ import CommandExecutionFile from './pages/commandexecution/CommandExecutionFile'
 import CommandExecutionNetwork from './pages/commandexecution/CommandExecutionNetwork';
 import Ssrf from './pages/Ssrf';
 import SsrfFetch from './pages/ssrf/SsrfFetch';
+import SsrfDocs from './pages/ssrf/SsrfDocs';
 import JsonpLab from './pages/jsonp/JsonpLab';
 import XxeLab from './pages/xxe/XxeLab';
 
@@ -127,6 +128,7 @@ function AppContent() {
         children: [
           { key: '/ssrf', label: '概览' },
           { key: '/ssrf/fetch', label: 'URL 获取' },
+          { key: '/ssrf/docs', label: '说明' },
         ],
       },
       {
@@ -220,6 +222,7 @@ function AppContent() {
 
                 <Route path="/ssrf" element={<Ssrf />} />
                 <Route path="/ssrf/fetch" element={<SsrfFetch />} />
+                <Route path="/ssrf/docs" element={<SsrfDocs />} />
 
                 <Route path="/jsonp" element={<JsonpLab />} />
                 <Route path="/xxe" element={<XxeLab />} />

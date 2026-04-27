@@ -4,15 +4,36 @@ import { useMemo, useState } from 'react';
 import { reportXssUi } from './_shared/reporting';
 import {
   contextIdByLab,
-  DOM_TEXT,
-  getLabChain,
   getLabGoal,
   getPayloadItems,
-  getWeakLevelOptionsByLab,
   MODE_OPTIONS,
 } from './XssDom.config';
 
 const { Title, Paragraph, Text } = Typography;
+
+const DOM_TEXT = {
+  keywordLabelJsonp: 'keyword（JSONP callback 输入）',
+  keywordPlaceholderJsonp: '例如：<script src="?callback=alert"></script>',
+};
+
+function getWeakLevelOptionsByLab(lab) {
+  if (lab === 'csp_jsonp') {
+    return [
+      { value: 1, label: 'WEAK-1：callback 黑名单（可被拼接/方括号绕过）' },
+      { value: 2, label: 'WEAK-2：CSP report-uri 拼接（演示分号注入）' },
+    ];
+  }
+  return [{ value: 1, label: 'WEAK-1' }];
+}
+
+function getLabChain(lab) {
+  if (lab === 'csp_jsonp') {
+    return {
+      vuln: '用户输入进入同源 JSONP 的 callback（gadget），在 CSP 限制下仍可能被“同源脚本”路径执行。',
+    };
+  }
+  return { vuln: '' };
+}
 
 export default function XssDomJsonp() {
   const [form] = Form.useForm();
